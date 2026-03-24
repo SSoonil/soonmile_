@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: soonmile-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:1q2w3e4r}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 30MB
+      max-request-size: 200MB
+  ai:
+    model:
+      chat: ${SPRING_AI_MODEL_CHAT:none}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: ${OPENAI_CHAT_TEMPERATURE:0.4}
+
+server:
+  port: 8080
+  tomcat:
+    max-swallow-size: 200MB
+    max-http-form-post-size: 200MB
+
+auth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:542892408623-gjiodnat9ai6iem17a2ck4085g78f71q.apps.googleusercontent.com}
+
+soonmile:
+  ai:
+    llm:
+      enabled: ${SOONMILE_AI_LLM_ENABLED:false}
