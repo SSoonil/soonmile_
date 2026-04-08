@@ -18,6 +18,17 @@
   box-sizing: border-box;
 }
 
+html {
+  min-height: 100%;
+  scrollbar-gutter: stable both-edges;
+}
+
+@supports not (scrollbar-gutter: stable) {
+  html {
+    overflow-y: scroll;
+  }
+}
+
 body {
   margin: 0;
   min-height: 100vh;

@@ -1,125 +1,43 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import './styles/interactive-cards.css'
 import { createPortal } from 'react-dom'
+import SponsoredBadge from './components/SponsoredBadge'
+import {
+  ADMIN_MENU_ITEMS,
+  ADMIN_ROUTE_KEYS,
+  AUTH_NAV_ITEMS,
+  NAV_ITEMS,
+  ROUTES,
+  USER_PROTECTED_ROUTE_KEYS,
+} from './routes/config'
+import {
+  getInviteCodeFromHash,
+  getPlaceIdFromHash,
+  getRouteFromHash,
+  getTripShareTokenFromHash,
+  getTripIdFromHash,
+  setPlaceViewHash,
+  setRouteHash,
+  setTripDetailHash,
+  toRouteHref,
+} from './routes/hash'
+import {
+  TRIP_PIN_COLOR_GROUP_DEFAULT,
+  getDefaultTripPinColor,
+  normalizeTripPinColor,
+} from './utils/tripPinColor'
 
 const KAKAO_MAP_API_KEY = import.meta.env.VITE_KAKAO_MAP_API_KEY
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL ?? '').trim()
 const GOOGLE_CLIENT_ID = String(import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '').trim()
 const GOOGLE_IDENTITY_SCRIPT_URL = 'https://accounts.google.com/gsi/client'
-const ADMIN_ACCOUNT = {
-  email: 'admin@soonmile.com',
-  password: 'admin1234',
-  name: 'Soonmile Admin',
-}
-const ADMIN_SESSION_KEY = 'soonmile-admin-session'
 const USER_SESSION_KEY = 'soonmile-user-session'
 const USER_GROUP_STORAGE_PREFIX = 'soonmile-user-default-group-id'
 const DEFAULT_CONSENT_TYPE = 'LOCATION_PHOTO_PROCESSING'
 const DEFAULT_CONSENT_VERSION = 'v1.0'
 const PHOTO_UPLOAD_MAX_BATCH_BYTES = 8 * 1024 * 1024
 const PHOTO_UPLOAD_MAX_BATCH_COUNT = 5
-const TRIP_PIN_COLOR_GROUP_DEFAULT = '#FF8B24'
-const TRIP_PIN_COLOR_SOLO_DEFAULT = '#1E7FCD'
-const TRIP_PIN_COLOR_FALLBACK = TRIP_PIN_COLOR_GROUP_DEFAULT
-
-const ROUTES = {
-  home: {
-    key: 'home',
-    label: '메인',
-    title: '추억 정리의 시작점',
-    description: '협찬 배너와 내 여행 요약을 먼저 보는 Soonmile 메인 페이지입니다.',
-  },
-  map: {
-    key: 'map',
-    label: '지도',
-    title: '카카오맵 기반 핀 뷰',
-    description: '여행 핀 군집과 동선을 확인하고 미분류 보정을 시작할 수 있습니다.',
-  },
-  trips: {
-    key: 'trips',
-    label: '내 여행들',
-    title: '내 여행 전체 보기',
-    description: '여행 목록과 팀 활동 로그를 함께 확인하는 통합 페이지입니다.',
-  },
-  places: {
-    key: 'places',
-    label: '추천 장소',
-    title: '추천 장소 & 제휴 스팟',
-    description: '협찬/광고 및 사용자 반응이 좋은 여행 장소를 지역별로 확인합니다.',
-  },
-  'place-view': {
-    key: 'place-view',
-    label: '추천 장소 상세',
-    title: '추천 장소 상세 보기',
-    description: '선택한 추천 장소의 상세 정보와 키워드를 확인할 수 있습니다.',
-  },
-  'trip-create': {
-    key: 'trip-create',
-    label: '내 여행 추가',
-    title: '새 여행 만들기',
-    description: '여행 정보를 입력하고 Soonmile 여행 리스트에 바로 추가하세요.',
-  },
-  'trip-view': {
-    key: 'trip-view',
-    label: '내 여행 보기',
-    title: '여행 상세 보기',
-    description: '선택한 여행의 기본 정보, 핀 위치, 사진 묶음을 한 페이지에서 확인합니다.',
-  },
-  'trip-detail': {
-    key: 'trip-detail',
-    label: '내 여행 상세',
-    title: '여행 상세 보기',
-    description: '선택한 여행의 기본 정보, 핀 위치, 사진 묶음을 한 페이지에서 확인합니다.',
-  },
-  'trip-edit': {
-    key: 'trip-edit',
-    label: '내 여행 수정',
-    title: '여행 정보 수정',
-    description: '기존 여행의 일정, 커버, 메모를 수정해 기록을 최신 상태로 유지하세요.',
-  },
-  login: {
-    key: 'login',
-    label: '로그인',
-    title: '계정에 다시 연결하기',
-    description: '저장된 여행 기록과 팀 프로젝트를 이어서 확인할 수 있습니다.',
-  },
-  'admin-login': {
-    key: 'admin-login',
-    label: '관리자 로그인',
-    title: '백오피스 관리자 로그인',
-    description: '운영자 계정으로 로그인해 여행/사용자/콘텐츠를 관리하세요.',
-  },
-  'admin-dashboard': {
-    key: 'admin-dashboard',
-    label: '백오피스',
-    title: '백오피스 대시보드',
-    description: '관리자 전용 화면입니다. 권한 체크를 통과한 계정만 접근할 수 있습니다.',
-  },
-  'admin-trips': {
-    key: 'admin-trips',
-    label: '여행 목록 관리',
-    title: '백오피스 · 여행 목록 관리',
-    description: '등록된 여행의 상태와 메타 정보를 검토하고 운영 관점에서 관리합니다.',
-  },
-  'admin-users': {
-    key: 'admin-users',
-    label: '사용자 목록 관리',
-    title: '백오피스 · 사용자 목록 관리',
-    description: '사용자 권한/상태를 조정하고 계정 운영 정책을 적용합니다.',
-  },
-  'admin-places': {
-    key: 'admin-places',
-    label: '추천장소 관리',
-    title: '백오피스 · 추천장소 관리',
-    description: '추천 장소의 노출 여부와 소개 콘텐츠를 관리합니다.',
-  },
-}
-
-const NAV_ITEMS = [ROUTES.home, ROUTES.map, ROUTES.trips, ROUTES.places]
-const AUTH_NAV_ITEMS = [ROUTES.login]
-const ADMIN_MENU_ITEMS = [ROUTES['admin-dashboard'], ROUTES['admin-trips'], ROUTES['admin-users'], ROUTES['admin-places']]
-const ADMIN_ROUTE_KEYS = new Set(['admin-dashboard', 'admin-trips', 'admin-users', 'admin-places'])
-const USER_PROTECTED_ROUTE_KEYS = new Set(['map', 'trips', 'trip-create', 'trip-view', 'trip-detail', 'trip-edit'])
 
 const SPONSOR_BANNERS = [
   {
@@ -142,161 +60,7 @@ const SPONSOR_BANNERS = [
   },
 ]
 
-const RECOMMENDED_PLACES = [
-  {
-    id: 'place-1',
-    name: '제주 협재 해변',
-    region: '제주',
-    description: '노을 촬영 핫스팟 · 오후 6시 추천',
-    isSponsored: true,
-    keywords: ['바다', '노을', '감성'],
-    image:
-      'https://images.unsplash.com/photo-1505765050516-f72dcac9c60d?auto=format&fit=crop&w=1000&q=80',
-  },
-  {
-    id: 'place-2',
-    name: '서울 북촌 한옥마을',
-    region: '서울',
-    description: '골목 스냅 포인트 다수',
-    keywords: ['도심', '전통', '골목'],
-    image:
-      'https://images.unsplash.com/photo-1538485399081-7c897f4d9f72?auto=format&fit=crop&w=1000&q=80',
-  },
-  {
-    id: 'place-3',
-    name: '부산 흰여울 문화마을',
-    region: '부산',
-    description: '바다 절벽길과 감성 카페 거리',
-    isSponsored: true,
-    keywords: ['바다', '감성', '카페'],
-    image:
-      'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1000&q=80',
-  },
-  {
-    id: 'place-4',
-    name: '강릉 안목해변',
-    region: '강릉',
-    description: '커피거리 + 해변 산책 루트',
-    keywords: ['휴식', '해변', '커피'],
-    image:
-      'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1000&q=80',
-  },
-  {
-    id: 'place-5',
-    name: '전주 한옥마을',
-    region: '전주',
-    description: '야간 조명과 한복 스냅 포인트',
-    keywords: ['야경', '전통', '스냅'],
-    image:
-      'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=1000&q=80',
-  },
-]
-
-const PLACE_DETAIL_CONTENT = {
-  'place-1': {
-    detailDescription:
-      '협재 해변은 에메랄드빛 바다와 낮은 수심 덕분에 스냅 촬영과 산책 모두 만족도가 높은 제주 대표 해변입니다. 해 질 무렵에는 바다와 하늘 색이 동시에 바뀌는 장면을 담기 좋아요.',
-    highlights: ['노을 스냅 포인트', '해변 산책 동선', '근처 감성 카페'],
-    bestTime: '오후 5:30 - 7:00',
-    gallery: [
-      'https://images.unsplash.com/photo-1473116763249-2faaef81ccda?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1000&q=80',
-    ],
-  },
-  'place-2': {
-    detailDescription:
-      '북촌 한옥마을은 전통 한옥 지붕 라인과 좁은 골목의 깊이감이 매력적인 스냅 명소입니다. 오전 시간대가 한적해 인물 촬영 동선 잡기가 쉽습니다.',
-    highlights: ['한옥 골목 뷰', '전통 소품샵', '도보 이동 동선'],
-    bestTime: '오전 9:00 - 11:00',
-    gallery: [
-      'https://images.unsplash.com/photo-1528164344705-47542687000d?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1000&q=80',
-    ],
-  },
-  'place-3': {
-    detailDescription:
-      '흰여울 문화마을은 바다를 따라 이어지는 절벽길과 컬러풀한 골목 벽면이 특징입니다. 오후 시간에는 역광을 활용한 실루엣 컷이 잘 나옵니다.',
-    highlights: ['절벽길 파노라마', '감성 벽화 구간', '근처 전망 카페'],
-    bestTime: '오후 4:30 - 6:30',
-    gallery: [
-      'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1512100356356-de1b84283e18?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1000&q=80',
-    ],
-  },
-  'place-4': {
-    detailDescription:
-      '안목해변은 해변 산책로와 카페 거리가 바로 연결되어 있어서 이동 동선이 편합니다. 커피거리 구간은 야간 조명까지 더해져 분위기 컷이 잘 나와요.',
-    highlights: ['커피거리', '해변 산책로', '야간 감성 조명'],
-    bestTime: '오후 3:00 - 7:30',
-    gallery: [
-      'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1473116763249-2faaef81ccda?auto=format&fit=crop&w=1000&q=80',
-    ],
-  },
-  'place-5': {
-    detailDescription:
-      '전주 한옥마을은 전통 건축과 먹거리 동선이 함께 있어 여행 기록을 풍성하게 만들기 좋습니다. 야간 조명이 켜진 뒤에는 분위기 있는 한복 스냅이 가능합니다.',
-    highlights: ['한복 스냅 구간', '전통 디저트 골목', '야간 조명 포인트'],
-    bestTime: '오후 5:00 - 8:30',
-    gallery: [
-      'https://images.unsplash.com/photo-1495195134817-aeb325a55b65?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1516685018646-549198525c1b?auto=format&fit=crop&w=1000&q=80',
-    ],
-  },
-}
-
-const PLACE_REVIEWS_SEED = {
-  'place-1': [
-    { author: '민서', rating: 5, comment: '노을 시간대가 정말 예쁘고 사진 색감이 잘 나왔어요.', createdAt: '2026-03-14T11:20:00Z' },
-    { author: '지훈', rating: 4, comment: '바람이 조금 셌지만 해변 동선이 좋아서 촬영하기 편했습니다.', createdAt: '2026-03-12T08:05:00Z' },
-  ],
-  'place-2': [
-    { author: '하연', rating: 5, comment: '오전 일찍 가면 사람 적어서 골목 스냅 찍기 좋아요.', createdAt: '2026-03-11T03:14:00Z' },
-  ],
-  'place-3': [
-    { author: '성민', rating: 4, comment: '전망 포인트가 여러 개라 다양한 컷을 얻을 수 있었습니다.', createdAt: '2026-03-09T12:45:00Z' },
-  ],
-}
-
-const ADMIN_USERS_SEED = [
-  {
-    id: 'admin-user-1',
-    name: 'Soonmile Admin',
-    email: ADMIN_ACCOUNT.email,
-    role: 'ADMIN',
-    status: 'ACTIVE',
-    joinedAt: '2025-01-02',
-  },
-  {
-    id: 'admin-user-2',
-    name: '홍길동',
-    email: 'hong@soonmile.com',
-    role: 'USER',
-    status: 'ACTIVE',
-    joinedAt: '2025-10-14',
-  },
-  {
-    id: 'admin-user-3',
-    name: '이여행',
-    email: 'travel.lee@soonmile.com',
-    role: 'USER',
-    status: 'ACTIVE',
-    joinedAt: '2025-11-01',
-  },
-  {
-    id: 'admin-user-4',
-    name: '운영파트너',
-    email: 'partner@soonmile.com',
-    role: 'MANAGER',
-    status: 'ACTIVE',
-    joinedAt: '2025-09-20',
-  },
-]
+const PLACE_DETAIL_CONTENT = {}
 
 const ADMIN_ROLE_OPTIONS = ['ADMIN', 'MANAGER', 'USER']
 const ADMIN_STATUS_OPTIONS = ['ACTIVE', 'PENDING', 'SUSPENDED']
@@ -384,26 +148,6 @@ function getSimilarGroupSubtitle(pinTitle, group, index) {
   return fallbackTitles[index % fallbackTitles.length]
 }
 
-function getRouteFromHash() {
-  const raw = window.location.hash.replace('#', '').trim()
-  if (raw.startsWith('trip-detail/')) {
-    return 'trip-detail'
-  }
-  if (raw && ROUTES[raw]) {
-    return raw
-  }
-  return 'home'
-}
-
-function getTripIdFromHash() {
-  const raw = window.location.hash.replace('#', '').trim()
-  if (!raw.startsWith('trip-detail/')) {
-    return null
-  }
-  const tripId = decodeURIComponent(raw.slice('trip-detail/'.length)).trim()
-  return tripId.length > 0 ? tripId : null
-}
-
 function buildApiUrl(path) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   if (!API_BASE_URL) {
@@ -424,6 +168,73 @@ function resolveMediaUrl(url) {
 }
 
 let googleIdentityScriptPromise = null
+const GOOGLE_IDENTITY_SCRIPT_TIMEOUT_MS = 10000
+
+function createGoogleIdentityScriptElement() {
+  const script = document.createElement('script')
+  script.src = GOOGLE_IDENTITY_SCRIPT_URL
+  script.async = true
+  script.defer = true
+  script.setAttribute('data-soonmile-loaded', 'false')
+  document.head.appendChild(script)
+  return script
+}
+
+function waitForGoogleIdentityScript(script) {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) {
+      resolve()
+      return
+    }
+
+    const loadedAttr = script.getAttribute('data-soonmile-loaded')
+    const likelyLoaded = loadedAttr === 'true' || script.readyState === 'complete'
+    if (likelyLoaded) {
+      reject(new Error('Google SDK를 불러왔지만 로그인 객체를 초기화하지 못했습니다. 브라우저 설정과 도메인을 확인해주세요.'))
+      return
+    }
+
+    let done = false
+    const cleanup = () => {
+      script.removeEventListener('load', handleLoad)
+      script.removeEventListener('error', handleError)
+      window.clearTimeout(timeoutId)
+    }
+    const finishResolve = () => {
+      if (done) {
+        return
+      }
+      done = true
+      cleanup()
+      resolve()
+    }
+    const finishReject = (error) => {
+      if (done) {
+        return
+      }
+      done = true
+      cleanup()
+      reject(error)
+    }
+    const handleLoad = () => {
+      script.setAttribute('data-soonmile-loaded', 'true')
+      if (!window.google?.accounts?.id) {
+        finishReject(new Error('Google SDK는 로드되었지만 로그인 객체를 찾지 못했습니다. 도메인/브라우저 설정을 확인해주세요.'))
+        return
+      }
+      finishResolve()
+    }
+    const handleError = () => {
+      finishReject(new Error('Google SDK 로드에 실패했습니다. 네트워크 또는 브라우저 차단 설정을 확인해주세요.'))
+    }
+    const timeoutId = window.setTimeout(() => {
+      finishReject(new Error('Google SDK 초기화가 지연되고 있습니다. 잠시 후 다시 시도해주세요.'))
+    }, GOOGLE_IDENTITY_SCRIPT_TIMEOUT_MS)
+
+    script.addEventListener('load', handleLoad, { once: true })
+    script.addEventListener('error', handleError, { once: true })
+  })
+}
 
 function loadGoogleIdentityScript() {
   if (window.google?.accounts?.id) {
@@ -433,25 +244,20 @@ function loadGoogleIdentityScript() {
     return googleIdentityScriptPromise
   }
 
-  googleIdentityScriptPromise = new Promise((resolve, reject) => {
-    const existingScript = document.querySelector(`script[src="${GOOGLE_IDENTITY_SCRIPT_URL}"]`)
-    if (existingScript) {
-      if (window.google?.accounts?.id) {
-        resolve()
-        return
-      }
-      existingScript.addEventListener('load', () => resolve(), { once: true })
-      existingScript.addEventListener('error', () => reject(new Error('Google SDK 로드에 실패했습니다.')), { once: true })
-      return
+  googleIdentityScriptPromise = (async () => {
+    let script = document.querySelector(`script[src="${GOOGLE_IDENTITY_SCRIPT_URL}"]`)
+    if (script && script.getAttribute('data-soonmile-loaded') === 'true' && !window.google?.accounts?.id) {
+      // Retry with a fresh tag when stale loaded state exists without Google global.
+      script.remove()
+      script = null
     }
-
-    const script = document.createElement('script')
-    script.src = GOOGLE_IDENTITY_SCRIPT_URL
-    script.async = true
-    script.defer = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Google SDK 로드에 실패했습니다.'))
-    document.head.appendChild(script)
+    if (!script) {
+      script = createGoogleIdentityScriptElement()
+    }
+    await waitForGoogleIdentityScript(script)
+  })().catch((error) => {
+    googleIdentityScriptPromise = null
+    throw error
   })
 
   return googleIdentityScriptPromise
@@ -475,6 +281,21 @@ class ApiRequestError extends Error {
     this.name = 'ApiRequestError'
     this.status = Number(status) || 0
   }
+}
+
+function isAuthStatus(status) {
+  return status === 401 || status === 403
+}
+
+function isAuthFailureError(error) {
+  return error instanceof ApiRequestError && isAuthStatus(error.status)
+}
+
+function isRecoverableBootstrapError(error) {
+  if (error instanceof ApiRequestError) {
+    return error.status >= 500
+  }
+  return true
 }
 
 async function requestJson(path, options = {}) {
@@ -591,12 +412,85 @@ function setStoredGroupId(email, groupId) {
   window.localStorage.setItem(key, normalizedGroupId)
 }
 
+function buildInviteHashUrl(inviteCode) {
+  const normalizedInviteCode = String(inviteCode ?? '').trim()
+  if (normalizedInviteCode.length === 0) {
+    return ''
+  }
+  return `${window.location.origin}${window.location.pathname}#invite/${encodeURIComponent(normalizedInviteCode)}`
+}
+
+function buildTripShareHashUrl(shareToken) {
+  const normalizedShareToken = String(shareToken ?? '').trim()
+  if (normalizedShareToken.length === 0) {
+    return ''
+  }
+  return `${window.location.origin}${window.location.pathname}#trip-share/${encodeURIComponent(normalizedShareToken)}`
+}
+
+function resolveTripShareUrl(shareToken, fallbackUrl) {
+  const hashUrl = buildTripShareHashUrl(shareToken)
+  if (hashUrl.length > 0) {
+    return hashUrl
+  }
+  return String(fallbackUrl ?? '').trim()
+}
+
+function parseContentDispositionFilename(contentDisposition) {
+  const normalized = String(contentDisposition ?? '').trim()
+  if (!normalized) {
+    return ''
+  }
+
+  const filenameStarMatch = normalized.match(/filename\*=UTF-8''([^;]+)/i)
+  if (filenameStarMatch?.[1]) {
+    try {
+      return decodeURIComponent(filenameStarMatch[1])
+    } catch {
+      return filenameStarMatch[1]
+    }
+  }
+
+  const filenameMatch = normalized.match(/filename="?([^";]+)"?/i)
+  if (filenameMatch?.[1]) {
+    return filenameMatch[1]
+  }
+
+  return ''
+}
+
 function normalizeNumberValue(value, fallback = 0) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) {
     return fallback
   }
   return parsed
+}
+
+function normalizeCoordinateValue(value) {
+  if (value === null || value === undefined) {
+    return null
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  const normalized = String(value).trim()
+  if (normalized.length === 0) {
+    return null
+  }
+
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function pickRandomItems(items, limit) {
+  const source = Array.isArray(items) ? [...items] : []
+  for (let index = source.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1))
+    ;[source[index], source[randomIndex]] = [source[randomIndex], source[index]]
+  }
+  return source.slice(0, Math.max(0, limit))
 }
 
 function parseDateRange(dateRange) {
@@ -699,24 +593,6 @@ function normalizeAdminUsers(users, fallbackUsers = []) {
 
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? '').trim())
-}
-
-function getDefaultTripPinColor(tripType) {
-  return String(tripType ?? '').trim().toUpperCase() === 'SOLO' ? TRIP_PIN_COLOR_SOLO_DEFAULT : TRIP_PIN_COLOR_GROUP_DEFAULT
-}
-
-function normalizeTripPinColor(value, fallbackColor = TRIP_PIN_COLOR_FALLBACK) {
-  const normalized = String(value ?? '').trim().toUpperCase()
-  if (/^#[0-9A-F]{6}$/.test(normalized)) {
-    return normalized
-  }
-
-  const normalizedFallback = String(fallbackColor ?? '').trim().toUpperCase()
-  if (/^#[0-9A-F]{6}$/.test(normalizedFallback)) {
-    return normalizedFallback
-  }
-
-  return TRIP_PIN_COLOR_FALLBACK
 }
 
 function buildInvitePerson(email) {
@@ -856,7 +732,7 @@ function normalizeTripMembers(members) {
       const fallbackName = normalizedEmail.split('@')[0] || '멤버'
       return {
         id: String(member?.userId ?? member?.id ?? `member-${index + 1}`).trim() || `member-${index + 1}`,
-        name: String(member?.name ?? '').trim() || fallbackName,
+        name: String(member?.name ?? member?.displayName ?? '').trim() || fallbackName,
         email: normalizedEmail,
         role: String(member?.role ?? '').trim(),
         joinedAt: String(member?.joinedAt ?? '').trim(),
@@ -872,6 +748,89 @@ function normalizeTripMembers(members) {
       seenEmails.add(member.email)
       return true
     })
+}
+
+function normalizeGroupInvites(invites) {
+  if (!Array.isArray(invites)) {
+    return []
+  }
+
+  const seenInviteIds = new Set()
+
+  return invites
+    .map((invite, index) => {
+      const email = String(invite?.invitedEmail ?? invite?.email ?? '').trim().toLowerCase()
+      if (!isValidEmail(email)) {
+        return null
+      }
+
+      const inviteId = String(invite?.inviteId ?? invite?.id ?? `group-invite-${index + 1}-${email}`).trim()
+      if (inviteId.length === 0) {
+        return null
+      }
+
+      return {
+        id: inviteId,
+        inviteCode: String(invite?.inviteCode ?? '').trim(),
+        name: String(invite?.invitedName ?? invite?.name ?? '').trim() || (email.split('@')[0] ?? '멤버'),
+        email,
+        inviteUrl: String(invite?.inviteUrl ?? '').trim(),
+        shareUrl:
+          String(invite?.inviteCode ?? '').trim().length > 0
+            ? buildInviteHashUrl(String(invite?.inviteCode ?? '').trim())
+            : String(invite?.inviteUrl ?? '').trim(),
+        status: String(invite?.status ?? '').trim().toUpperCase() || 'PENDING',
+        expiresAt: String(invite?.expiresAt ?? '').trim(),
+        acceptedAt: String(invite?.acceptedAt ?? '').trim(),
+      }
+    })
+    .filter((invite) => {
+      if (!invite) {
+        return false
+      }
+      if (seenInviteIds.has(invite.id)) {
+        return false
+      }
+      seenInviteIds.add(invite.id)
+      return true
+    })
+}
+
+function resolveMyGroupRole(groupMembers, currentUserEmail, fallbackRole = 'MEMBER') {
+  const normalizedMembers = normalizeTripMembers(groupMembers)
+  const normalizedEmail = String(currentUserEmail ?? '').trim().toLowerCase()
+  const myMember = normalizedMembers.find((member) => member.email === normalizedEmail)
+  const memberRole = String(myMember?.role ?? '').trim().toUpperCase()
+  if (memberRole === 'OWNER' || memberRole === 'MEMBER') {
+    return memberRole
+  }
+  const fallback = String(fallbackRole ?? '').trim().toUpperCase()
+  return fallback === 'OWNER' ? 'OWNER' : 'MEMBER'
+}
+
+function buildGroupParticipation(groupMembers, groupInvites, currentUserEmail, fallbackRole = 'MEMBER', fallbackMemberCount = 1) {
+  const normalizedMembers = normalizeTripMembers(groupMembers)
+  const normalizedGroupInvites = normalizeGroupInvites(groupInvites)
+  const invitedPeople = normalizeInvitedPeople(
+    normalizedGroupInvites.map((invite) => ({
+      id: invite.id,
+      name: invite.name,
+      email: invite.email,
+    })),
+  )
+  const participation = buildTripParticipationFromMembers(
+    normalizedMembers,
+    currentUserEmail,
+    invitedPeople,
+    fallbackMemberCount,
+    normalizedMembers,
+  )
+
+  return {
+    ...participation,
+    groupInvites: normalizedGroupInvites,
+    myGroupRole: resolveMyGroupRole(normalizedMembers, currentUserEmail, fallbackRole),
+  }
 }
 
 function resolveTripParticipation({ memberCount, invitedPeople }) {
@@ -908,7 +867,14 @@ function buildTripParticipationFromMembers(
   )
   const effectiveInvites = invitedPeopleFromMembers.length > 0 ? invitedPeopleFromMembers : normalizeInvitedPeople(fallbackInvites)
   const effectiveParticipants = normalizedMembers.length > 0 ? normalizedMembers : normalizedFallbackParticipants
-  const memberCountFromMembers = effectiveParticipants.length > 0 ? effectiveParticipants.length : fallbackMemberCount
+  const normalizedFallbackCount = Number.isFinite(Number(fallbackMemberCount))
+    ? Math.max(1, Math.floor(Number(fallbackMemberCount)))
+    : 1
+  const memberCountFromMembers = Math.max(
+    normalizedFallbackCount,
+    effectiveParticipants.length > 0 ? effectiveParticipants.length : 0,
+    effectiveInvites.length + 1,
+  )
   const resolvedParticipation = resolveTripParticipation({
     memberCount: memberCountFromMembers,
     invitedPeople: effectiveInvites,
@@ -958,7 +924,7 @@ function normalizeRecommendedPlaces(places) {
       const details = PLACE_DETAIL_CONTENT[id] ?? {}
       const name = String(place.name ?? '').trim()
       const description = String(place.description ?? '').trim()
-      const image = String(place.image ?? '').trim()
+      const image = resolveMediaUrl(String(place.image ?? '').trim())
       const keywords = Array.isArray(place.keywords)
         ? place.keywords.map((keyword) => String(keyword).trim()).filter((keyword) => keyword.length > 0)
         : []
@@ -973,8 +939,10 @@ function normalizeRecommendedPlaces(places) {
         ...(Array.isArray(details.gallery) ? details.gallery : []),
       ]
       const gallery = Array.from(
-        new Set(galleryRaw.map((item) => String(item).trim()).filter((item) => item.length > 0 && item !== image)),
+        new Set(galleryRaw.map((item) => resolveMediaUrl(String(item).trim())).filter((item) => item.length > 0 && item !== image)),
       )
+      const latitude = normalizeCoordinateValue(place.latitude)
+      const longitude = normalizeCoordinateValue(place.longitude)
 
       return {
         ...place,
@@ -988,6 +956,8 @@ function normalizeRecommendedPlaces(places) {
         bestTime: String(place.bestTime ?? details.bestTime ?? '').trim(),
         image,
         gallery,
+        latitude,
+        longitude,
         isVisible: place.isVisible !== false,
         isSponsored: place.isSponsored === true,
       }
@@ -995,15 +965,20 @@ function normalizeRecommendedPlaces(places) {
     .filter((place) => place.name.length > 0)
 }
 
-function SponsoredBadge() {
-  return (
-    <span className="sponsor-badge" aria-label="제휴 장소">
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M3 18h18l-1.2 3H4.2L3 18zm2.2-11.1 4.6 3.5 2.2-6.4 2.2 6.4 4.6-3.5-1.8 9.1H7l-1.8-9.1z" />
-      </svg>
-      <span>제휴</span>
-    </span>
-  )
+function getInitialSelectedPlaceImage(place) {
+  const primaryImage = String(place?.image ?? '').trim()
+  if (primaryImage.length > 0) {
+    return primaryImage
+  }
+
+  if (Array.isArray(place?.gallery)) {
+    const firstGalleryImage = place.gallery.map((item) => String(item ?? '').trim()).find((item) => item.length > 0)
+    if (firstGalleryImage) {
+      return firstGalleryImage
+    }
+  }
+
+  return ''
 }
 
 function normalizeReviewRating(value) {
@@ -1031,7 +1006,7 @@ function normalizePlaceReviewList(reviews, placeId) {
       }
 
       return {
-        id: String(review.id ?? `${placeId}-review-${index + 1}`),
+        id: String(review.reviewId ?? review.id ?? `${placeId}-review-${index + 1}`),
         author: String(review.author ?? '익명 사용자').trim() || '익명 사용자',
         rating: normalizeReviewRating(review.rating),
         comment,
@@ -1104,38 +1079,71 @@ function buildTripPhotoItems(trip) {
 }
 
 function loadKakaoMapSdk(appKey) {
-  return new Promise((resolve, reject) => {
-    if (!appKey) {
-      reject(new Error('VITE_KAKAO_MAP_API_KEY 값이 없습니다.'))
-      return
-    }
+  const normalizedAppKey = String(appKey ?? '').trim()
+  if (!normalizedAppKey || normalizedAppKey.startsWith('your_')) {
+    return Promise.reject(new Error('VITE_KAKAO_MAP_API_KEY 값이 없습니다.'))
+  }
 
-    if (window.kakao?.maps) {
-      window.kakao.maps.load(() => resolve(window.kakao))
-      return
-    }
-
-    const existingScript = document.getElementById('kakao-map-sdk')
-    if (existingScript) {
-      existingScript.addEventListener(
-        'load',
-        () => window.kakao.maps.load(() => resolve(window.kakao)),
-        { once: true },
-      )
-      existingScript.addEventListener('error', () => reject(new Error('카카오맵 SDK 로드 실패')), {
-        once: true,
+  const resolveKakaoWhenReady = () =>
+    new Promise((resolve, reject) => {
+      if (!window.kakao?.maps?.load) {
+        reject(new Error('카카오맵 SDK 초기화에 실패했습니다. 앱키와 도메인 등록을 확인해주세요.'))
+        return
+      }
+      window.kakao.maps.load(() => {
+        if (!window.kakao?.maps) {
+          reject(new Error('카카오맵 SDK 초기화에 실패했습니다. 앱키와 도메인 등록을 확인해주세요.'))
+          return
+        }
+        resolve(window.kakao)
       })
-      return
+    })
+
+  if (window.kakao?.maps?.load) {
+    return resolveKakaoWhenReady()
+  }
+
+  if (window.__soonmileKakaoSdkPromise && window.__soonmileKakaoSdkKey === normalizedAppKey) {
+    return window.__soonmileKakaoSdkPromise
+  }
+
+  window.__soonmileKakaoSdkKey = normalizedAppKey
+  window.__soonmileKakaoSdkPromise = new Promise((resolve, reject) => {
+    let script = document.getElementById('kakao-map-sdk')
+
+    const finalizeWithKakao = () => {
+      resolveKakaoWhenReady().then(resolve).catch(reject)
     }
 
-    const script = document.createElement('script')
-    script.id = 'kakao-map-sdk'
-    script.async = true
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false&libraries=services`
-    script.onload = () => window.kakao.maps.load(() => resolve(window.kakao))
-    script.onerror = () => reject(new Error('카카오맵 SDK 로드 실패'))
-    document.head.append(script)
+    if (script) {
+      const mountedAppKey = String(script.getAttribute('data-appkey') ?? '').trim()
+      if (mountedAppKey && mountedAppKey !== normalizedAppKey) {
+        script.remove()
+        script = null
+      }
+    }
+
+    if (!script) {
+      script = document.createElement('script')
+      script.id = 'kakao-map-sdk'
+      script.async = true
+      script.defer = true
+      script.setAttribute('data-appkey', normalizedAppKey)
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${normalizedAppKey}&autoload=false&libraries=services`
+      document.head.append(script)
+    }
+
+    const handleLoad = () => finalizeWithKakao()
+    const handleError = () => reject(new Error('카카오맵 SDK 로드 실패. 네트워크/차단 설정 또는 도메인 등록을 확인해주세요.'))
+
+    script.addEventListener('load', handleLoad, { once: true })
+    script.addEventListener('error', handleError, { once: true })
+  }).catch((error) => {
+    window.__soonmileKakaoSdkPromise = null
+    throw error
   })
+
+  return window.__soonmileKakaoSdkPromise
 }
 
 function buildMarkerImage(kakao, color) {
@@ -1281,18 +1289,11 @@ function HomeView({ trips, loading, loadError, onOpenTripView }) {
         ) : trips.length > 0 ? (
           <div className="trip-grid">
             {trips.slice(0, 5).map((trip) => (
-              <article
+              <button
                 key={trip.id}
+                type="button"
                 className="trip-card is-clickable"
-                role="button"
-                tabIndex={0}
                 onClick={() => onOpenTripView?.(trip.id)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    onOpenTripView?.(trip.id)
-                  }
-                }}
                 aria-label={`${trip.name} 상세 보기`}
               >
                 <img src={trip.cover} alt={trip.name} />
@@ -1303,7 +1304,7 @@ function HomeView({ trips, loading, loadError, onOpenTripView }) {
                     {trip.members}명 참여 · 사진 {trip.photos}장
                   </span>
                 </div>
-              </article>
+              </button>
             ))}
           </div>
         ) : (
@@ -1328,6 +1329,10 @@ function MapView({ trips, loading, loadError }) {
 
     const initMap = async () => {
       try {
+        if (!isActive) {
+          return
+        }
+        setMapError('')
         const kakao = await loadKakaoMapSdk(KAKAO_MAP_API_KEY)
         if (!isActive || !mapRef.current) {
           return
@@ -1365,8 +1370,10 @@ function MapView({ trips, loading, loadError }) {
         })
 
         map.setBounds(bounds)
+        setMapError('')
         setMapReady(true)
       } catch (error) {
+        setMapReady(false)
         setMapError(error instanceof Error ? error.message : '지도를 불러오지 못했습니다.')
       }
     }
@@ -1416,6 +1423,11 @@ function TripsView({ trips, loading, loadError, onOpenCreateTrip, onOpenTripView
   const [tripTypeFilter, setTripTypeFilter] = useState('ALL')
   const [sortBy, setSortBy] = useState('LATEST')
   const [selectedTripIds, setSelectedTripIds] = useState(() => trips.map((trip) => trip.id))
+  const validTripIds = useMemo(() => new Set(trips.map((trip) => trip.id)), [trips])
+  const effectiveSelectedTripIds = useMemo(() => {
+    const validSelections = selectedTripIds.filter((id) => validTripIds.has(id))
+    return validSelections.length > 0 ? validSelections : trips.map((trip) => trip.id)
+  }, [selectedTripIds, trips, validTripIds])
 
   const filteredTrips = useMemo(() => {
     const filtered =
@@ -1439,39 +1451,32 @@ function TripsView({ trips, loading, loadError, onOpenCreateTrip, onOpenTripView
   const visibleTripIds = useMemo(() => filteredTrips.map((trip) => trip.id), [filteredTrips])
 
   const allVisibleSelected = useMemo(
-    () => visibleTripIds.length > 0 && visibleTripIds.every((tripId) => selectedTripIds.includes(tripId)),
-    [visibleTripIds, selectedTripIds],
+    () => visibleTripIds.length > 0 && visibleTripIds.every((tripId) => effectiveSelectedTripIds.includes(tripId)),
+    [visibleTripIds, effectiveSelectedTripIds],
   )
 
   const pinsForMap = useMemo(() => {
-    const targetTrips = filteredTrips.filter((trip) => selectedTripIds.includes(trip.id))
+    const targetTrips = filteredTrips.filter((trip) => effectiveSelectedTripIds.includes(trip.id))
 
     return getAllPinsFromTrips(targetTrips)
-  }, [filteredTrips, selectedTripIds])
-
-  useEffect(() => {
-    setSelectedTripIds((prev) => {
-      const validIds = prev.filter((id) => trips.some((trip) => trip.id === id))
-      const next = validIds.length === 0 ? trips.map((trip) => trip.id) : validIds
-      return next
-    })
-  }, [trips])
+  }, [filteredTrips, effectiveSelectedTripIds])
 
   const toggleTrip = (tripId, checked) => {
     setSelectedTripIds((prev) => {
+      const validPrev = prev.filter((id) => validTripIds.has(id))
       if (checked) {
-        if (prev.includes(tripId)) {
-          return prev
+        if (validPrev.includes(tripId)) {
+          return validPrev
         }
-        return [...prev, tripId]
+        return [...validPrev, tripId]
       }
-      return prev.filter((id) => id !== tripId)
+      return validPrev.filter((id) => id !== tripId)
     })
   }
 
   const toggleAllVisible = (checked) => {
     setSelectedTripIds((prev) => {
-      const next = new Set(prev)
+      const next = new Set(prev.filter((id) => validTripIds.has(id)))
       if (checked) {
         visibleTripIds.forEach((tripId) => next.add(tripId))
       } else {
@@ -1486,6 +1491,10 @@ function TripsView({ trips, loading, loadError, onOpenCreateTrip, onOpenTripView
 
     const initOrUpdateMap = async () => {
       try {
+        if (!isActive) {
+          return
+        }
+        setMapError('')
         const kakao = await loadKakaoMapSdk(KAKAO_MAP_API_KEY)
         if (!isActive || !mapRef.current) {
           return
@@ -1534,8 +1543,10 @@ function TripsView({ trips, loading, loadError, onOpenCreateTrip, onOpenTripView
           map.setLevel(12)
         }
 
+        setMapError('')
         setMapReady(true)
       } catch (error) {
+        setMapReady(false)
         setMapError(error instanceof Error ? error.message : '지도를 불러오지 못했습니다.')
       }
     }
@@ -1562,7 +1573,7 @@ function TripsView({ trips, loading, loadError, onOpenCreateTrip, onOpenTripView
           </div>
         </div>
 
-        <div className="map-wrap trip-map-wrap">
+        <div className="map-wrap">
           <div ref={mapRef} className="kakao-map" />
           {!mapReady && !mapError && <div className="map-overlay">지도를 불러오는 중...</div>}
           {mapError && <div className="map-overlay map-error">{mapError}</div>}
@@ -1609,22 +1620,9 @@ function TripsView({ trips, loading, loadError, onOpenCreateTrip, onOpenTripView
           </div>
 
           {filteredTrips.map((trip) => {
-            const isChecked = selectedTripIds.includes(trip.id)
+                    const isChecked = effectiveSelectedTripIds.includes(trip.id)
             return (
-              <article
-                key={trip.id}
-                className={`trip-list-row is-clickable ${isChecked ? 'is-selected' : ''}`}
-                onClick={() => onOpenTripView(trip.id)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    onOpenTripView(trip.id)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label={`${trip.name} 상세 보기`}
-              >
+              <article key={trip.id} className={`trip-list-row ${isChecked ? 'is-selected' : ''}`}>
                 <label className="trip-list-row-check" onClick={(event) => event.stopPropagation()}>
                   <input
                     type="checkbox"
@@ -1632,26 +1630,33 @@ function TripsView({ trips, loading, loadError, onOpenCreateTrip, onOpenTripView
                     onChange={(event) => toggleTrip(trip.id, event.target.checked)}
                   />
                 </label>
-                <img src={trip.cover} alt={trip.name} />
-                <div className="trip-list-row-main">
-                  <strong>{trip.name}</strong>
-                  <p>{trip.dateRange}</p>
-                  <span>
-                    {trip.members}명 참여 · 사진 {trip.photos}장 · 핀 {trip.pins.length}개
-                  </span>
-                </div>
-                <div className="trip-list-row-side">
-                  <b className={`trip-type-badge ${trip.type === 'GROUP' ? 'group' : 'solo'}`}>
-                    {trip.type === 'GROUP' ? '그룹여행' : '혼자여행'}
-                  </b>
-                  <span className="trip-list-color-chip">
-                    <i
-                      className="trip-list-color-dot"
-                      style={{ backgroundColor: normalizeTripPinColor(trip.pinColor, getDefaultTripPinColor(trip.type)) }}
-                    />
-                    핀 색상
-                  </span>
-                </div>
+                <button
+                  type="button"
+                  className="trip-list-row-content is-clickable"
+                  onClick={() => onOpenTripView(trip.id)}
+                  aria-label={`${trip.name} 상세 보기`}
+                >
+                  <img src={trip.cover} alt={trip.name} />
+                  <div className="trip-list-row-main">
+                    <strong>{trip.name}</strong>
+                    <p>{trip.dateRange}</p>
+                    <span>
+                      {trip.members}명 참여 · 사진 {trip.photos}장 · 핀 {trip.pins.length}개
+                    </span>
+                  </div>
+                  <div className="trip-list-row-side">
+                    <b className={`trip-type-badge ${trip.type === 'GROUP' ? 'group' : 'solo'}`}>
+                      {trip.type === 'GROUP' ? '그룹여행' : '혼자여행'}
+                    </b>
+                    <span className="trip-list-color-chip">
+                      <i
+                        className="trip-list-color-dot"
+                        style={{ backgroundColor: normalizeTripPinColor(trip.pinColor, getDefaultTripPinColor(trip.type)) }}
+                      />
+                      핀 색상
+                    </span>
+                  </div>
+                </button>
               </article>
             )
           })}
@@ -1676,6 +1681,13 @@ function TripDetailPage({
   onBackToTrips,
   onOpenEditTrip,
   onAddTripInvite,
+  onUpdateGroupMemberRole,
+  onRemoveGroupMember,
+  onRevokeGroupInvite,
+  onDownloadTripPhotoZip,
+  onCreateTripShare,
+  onListTripShares,
+  onRevokeTripShare,
   onDeleteTrip,
 }) {
   if (!tripId) {
@@ -1738,12 +1750,33 @@ function TripDetailPage({
       onBackToTrips={onBackToTrips}
       onOpenEditTrip={onOpenEditTrip}
       onAddTripInvite={onAddTripInvite}
+      onUpdateGroupMemberRole={onUpdateGroupMemberRole}
+      onRemoveGroupMember={onRemoveGroupMember}
+      onRevokeGroupInvite={onRevokeGroupInvite}
+      onDownloadTripPhotoZip={onDownloadTripPhotoZip}
+      onCreateTripShare={onCreateTripShare}
+      onListTripShares={onListTripShares}
+      onRevokeTripShare={onRevokeTripShare}
       onDeleteTrip={onDeleteTrip}
     />
   )
 }
 
-function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddTripInvite, onDeleteTrip }) {
+function TripViewPage({
+  trip,
+  currentUser,
+  onBackToTrips,
+  onOpenEditTrip,
+  onAddTripInvite,
+  onUpdateGroupMemberRole,
+  onRemoveGroupMember,
+  onRevokeGroupInvite,
+  onDownloadTripPhotoZip,
+  onCreateTripShare,
+  onListTripShares,
+  onRevokeTripShare,
+  onDeleteTrip,
+}) {
   const mapRef = useRef(null)
   const mapObjRef = useRef(null)
   const markerRef = useRef([])
@@ -1754,12 +1787,25 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteError, setInviteError] = useState('')
   const [inviteNotice, setInviteNotice] = useState('')
+  const [memberActionError, setMemberActionError] = useState('')
+  const [memberActionNotice, setMemberActionNotice] = useState('')
+  const [pendingGroupActionKey, setPendingGroupActionKey] = useState('')
   const [deleteError, setDeleteError] = useState('')
+  const [shareNotice, setShareNotice] = useState('')
+  const [shareError, setShareError] = useState('')
+  const [isCreatingShareLink, setIsCreatingShareLink] = useState(false)
+  const [tripShares, setTripShares] = useState([])
+  const [tripSharesLoading, setTripSharesLoading] = useState(false)
+  const [pendingShareActionId, setPendingShareActionId] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [pinRegionLabelById, setPinRegionLabelById] = useState({})
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false)
+  const [downloadZipError, setDownloadZipError] = useState('')
+  const [downloadZipNotice, setDownloadZipNotice] = useState('')
 
   const pinsForMap = useMemo(() => (trip ? getAllPinsFromTrips([trip]) : []), [trip])
   const invitedPeople = useMemo(() => normalizeInvitedPeople(trip?.invitedPeople), [trip])
+  const groupInvites = useMemo(() => normalizeGroupInvites(trip?.groupInvites), [trip?.groupInvites])
   const tripParticipants = useMemo(() => {
     const participantsFromTrip = normalizeTripMembers(trip?.participants)
     if (participantsFromTrip.length > 0) {
@@ -1767,6 +1813,8 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
     }
     return buildLocalTripParticipants(invitedPeople, currentUser)
   }, [currentUser, invitedPeople, trip?.participants])
+  const currentUserEmail = String(currentUser?.email ?? '').trim().toLowerCase()
+  const canManageGroup = String(trip?.myGroupRole ?? '').trim().toUpperCase() === 'OWNER'
   const unresolvedTripPhotos = useMemo(() => {
     const previews = Array.isArray(trip?.photoPreviews) ? trip.photoPreviews : []
     return previews
@@ -1845,10 +1893,50 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
     setInviteEmail('')
     setInviteError('')
     setInviteNotice('')
+    setMemberActionError('')
+    setMemberActionNotice('')
+    setPendingGroupActionKey('')
     setDeleteError('')
+    setShareNotice('')
+    setShareError('')
+    setIsCreatingShareLink(false)
+    setTripShares([])
+    setTripSharesLoading(false)
+    setPendingShareActionId('')
     setIsDeleting(false)
     setPinRegionLabelById({})
+    setIsDownloadingZip(false)
+    setDownloadZipError('')
+    setDownloadZipNotice('')
   }, [trip?.id])
+
+  useEffect(() => {
+    if (!trip?.id || typeof onListTripShares !== 'function') {
+      return
+    }
+    let isActive = true
+    setTripSharesLoading(true)
+    onListTripShares(trip.id)
+      .then((items) => {
+        if (!isActive) {
+          return
+        }
+        setTripShares(Array.isArray(items) ? items : [])
+      })
+      .catch(() => {
+        if (isActive) {
+          setTripShares([])
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setTripSharesLoading(false)
+        }
+      })
+    return () => {
+      isActive = false
+    }
+  }, [trip?.id, onListTripShares])
 
   useEffect(() => {
     let isActive = true
@@ -2027,6 +2115,10 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
 
     const initOrUpdateMap = async () => {
       try {
+        if (!isActive) {
+          return
+        }
+        setMapError('')
         const kakao = await loadKakaoMapSdk(KAKAO_MAP_API_KEY)
         if (!isActive || !mapRef.current) {
           return
@@ -2075,8 +2167,10 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
           map.setLevel(12)
         }
 
+        setMapError('')
         setMapReady(true)
       } catch (error) {
+        setMapReady(false)
         setMapError(error instanceof Error ? error.message : '지도를 불러오지 못했습니다.')
       }
     }
@@ -2108,6 +2202,12 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
       return
     }
 
+    if (groupInvites.some((invite) => invite.email === normalizedEmail && invite.status === 'PENDING')) {
+      setInviteError('이미 초대 링크를 보낸 이메일입니다.')
+      setInviteNotice('')
+      return
+    }
+
     try {
       const result = await onAddTripInvite(trip.id, normalizedEmail)
       const invitedEmail = String(result?.member?.email ?? normalizedEmail).trim() || normalizedEmail
@@ -2116,11 +2216,71 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
       if (result?.alreadyMember) {
         setInviteNotice(`${invitedEmail} 은(는) 이미 그룹에 참여 중입니다.`)
       } else {
-        setInviteNotice(`${invitedEmail} 을(를) 여행에 추가했습니다.`)
+        setInviteNotice(`${invitedEmail} 에게 그룹 초대 링크를 보냈습니다.`)
       }
     } catch (requestError) {
       setInviteNotice('')
       setInviteError(requestError instanceof Error ? requestError.message : '초대 전송에 실패했습니다.')
+    }
+  }
+
+  const handleMemberRoleChange = async (memberUserId, nextRole) => {
+    if (!trip?.groupId || typeof onUpdateGroupMemberRole !== 'function') {
+      return
+    }
+
+    setMemberActionError('')
+    setMemberActionNotice('')
+    setPendingGroupActionKey(`role:${memberUserId}`)
+    try {
+      await onUpdateGroupMemberRole(trip.groupId, memberUserId, nextRole)
+      setMemberActionNotice('그룹 권한을 업데이트했습니다.')
+    } catch (error) {
+      setMemberActionError(error instanceof Error ? error.message : '그룹 권한 변경에 실패했습니다.')
+    } finally {
+      setPendingGroupActionKey('')
+    }
+  }
+
+  const handleRemoveMember = async (member) => {
+    if (!trip?.groupId || typeof onRemoveGroupMember !== 'function') {
+      return
+    }
+    if (!window.confirm(`${member.name} 님을 그룹에서 제외할까요?`)) {
+      return
+    }
+
+    setMemberActionError('')
+    setMemberActionNotice('')
+    setPendingGroupActionKey(`remove:${member.id}`)
+    try {
+      await onRemoveGroupMember(trip.groupId, member.id)
+      setMemberActionNotice('그룹 멤버를 제외했습니다.')
+    } catch (error) {
+      setMemberActionError(error instanceof Error ? error.message : '그룹 멤버 제거에 실패했습니다.')
+    } finally {
+      setPendingGroupActionKey('')
+    }
+  }
+
+  const handleRevokeInvite = async (invite) => {
+    if (!trip?.groupId || typeof onRevokeGroupInvite !== 'function') {
+      return
+    }
+    if (!window.confirm(`${invite.email} 초대를 취소할까요?`)) {
+      return
+    }
+
+    setMemberActionError('')
+    setMemberActionNotice('')
+    setPendingGroupActionKey(`invite:${invite.id}`)
+    try {
+      await onRevokeGroupInvite(trip.groupId, invite.id)
+      setMemberActionNotice('대기 중인 그룹 초대를 취소했습니다.')
+    } catch (error) {
+      setMemberActionError(error instanceof Error ? error.message : '그룹 초대 취소에 실패했습니다.')
+    } finally {
+      setPendingGroupActionKey('')
     }
   }
 
@@ -2138,11 +2298,79 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
 
     try {
       await onDeleteTrip(trip.id)
-      window.location.hash = '#trips'
+          setRouteHash('trips')
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : '여행 삭제에 실패했습니다.')
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  const handleCreateShareLink = async () => {
+    if (!trip?.id || typeof onCreateTripShare !== 'function') {
+      return
+    }
+    setShareNotice('')
+    setShareError('')
+    setIsCreatingShareLink(true)
+    try {
+      const result = await onCreateTripShare(trip.id)
+      const shareUrl = String(result?.shareUrl ?? '').trim()
+      if (shareUrl.length === 0) {
+        throw new Error('공유 링크 생성 응답이 올바르지 않습니다.')
+      }
+      await window.navigator.clipboard?.writeText(shareUrl)
+      setTripShares((prev) => [result, ...prev])
+      setShareNotice('공유 링크를 생성하고 클립보드에 복사했습니다.')
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '공유 링크 생성에 실패했습니다.')
+    } finally {
+      setIsCreatingShareLink(false)
+    }
+  }
+
+  const handleRevokeShareLink = async (shareId) => {
+    if (!trip?.id || typeof onRevokeTripShare !== 'function') {
+      return
+    }
+    if (!window.confirm('이 공유 링크를 만료(철회) 처리할까요?')) {
+      return
+    }
+    setPendingShareActionId(String(shareId ?? '').trim())
+    setShareError('')
+    try {
+      await onRevokeTripShare(trip.id, shareId)
+      setTripShares((prev) =>
+        prev.map((item) =>
+          String(item?.shareId ?? '').trim() === String(shareId ?? '').trim()
+            ? { ...item, revoked: true, status: 'REVOKED' }
+            : item,
+        ),
+      )
+      setShareNotice('공유 링크를 철회했습니다.')
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '공유 링크 철회에 실패했습니다.')
+    } finally {
+      setPendingShareActionId('')
+    }
+  }
+
+  const handleDownloadPhotoZip = async () => {
+    if (!trip?.id || typeof onDownloadTripPhotoZip !== 'function') {
+      return
+    }
+    setDownloadZipError('')
+    setDownloadZipNotice('')
+    setIsDownloadingZip(true)
+
+    try {
+      await onDownloadTripPhotoZip(trip)
+
+      setDownloadZipNotice('사진 ZIP 파일 다운로드가 시작되었습니다.')
+    } catch (error) {
+      setDownloadZipError(error instanceof Error ? error.message : '사진 ZIP 다운로드에 실패했습니다.')
+    } finally {
+      setIsDownloadingZip(false)
     }
   }
 
@@ -2195,8 +2423,14 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
               목록으로
             </button>
             <div className="trip-detail-actions">
+              <button type="button" className="trip-action-btn ghost" onClick={handleDownloadPhotoZip} disabled={isDownloadingZip}>
+                {isDownloadingZip ? 'ZIP 다운로드 중...' : '사진 ZIP 다운로드'}
+              </button>
               <button type="button" className="trip-action-btn ghost" onClick={() => onOpenEditTrip(trip.id)}>
                 수정하기
+              </button>
+              <button type="button" className="trip-action-btn ghost" onClick={handleCreateShareLink} disabled={isCreatingShareLink}>
+                {isCreatingShareLink ? '링크 생성 중...' : '공유 링크 생성'}
               </button>
               <button type="button" className="trip-action-btn danger" onClick={handleDeleteTrip} disabled={isDeleting}>
                 {isDeleting ? '삭제 중...' : '여행 삭제'}
@@ -2204,6 +2438,63 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
             </div>
           </div>
           {deleteError && <p className="trip-invite-error">{deleteError}</p>}
+          {shareError && <p className="trip-invite-error">{shareError}</p>}
+          {shareNotice && <p className="trip-invite-notice">{shareNotice}</p>}
+          {downloadZipError && <p className="trip-invite-error">{downloadZipError}</p>}
+          {downloadZipNotice && <p className="trip-invite-notice">{downloadZipNotice}</p>}
+
+          <section className="trip-share-manage-panel">
+            <div className="trip-invite-head">
+              <h4>공유 링크 관리</h4>
+              <span>총 {tripShares.length}건</span>
+            </div>
+            {tripSharesLoading ? (
+              <p className="trip-invite-empty">공유 링크를 불러오는 중...</p>
+            ) : tripShares.length === 0 ? (
+              <p className="trip-invite-empty">생성된 공유 링크가 없습니다.</p>
+            ) : (
+              <ul className="group-invite-list">
+                {tripShares.map((share) => {
+                  const shareId = String(share?.shareId ?? '').trim()
+                  const status = String(share?.status ?? '').trim().toUpperCase() || 'ACTIVE'
+                  const shareUrl = resolveTripShareUrl(share?.shareToken, share?.shareUrl)
+                  return (
+                    <li key={shareId || shareUrl}>
+                      <div className="group-member-summary">
+                        <strong>{status === 'ACTIVE' ? '사용 가능' : status === 'EXPIRED' ? '만료됨' : '철회됨'}</strong>
+                        <span>{shareUrl}</span>
+                        <small>
+                          생성 {share?.createdAt ? new Date(share.createdAt).toLocaleString('ko-KR') : '미정'} · 만료 {share?.expiresAt ? new Date(share.expiresAt).toLocaleString('ko-KR') : '미정'}
+                        </small>
+                      </div>
+                      <div className="group-member-actions">
+                        <button
+                          type="button"
+                          className="trip-action-btn ghost compact"
+                          onClick={async () => {
+                            await window.navigator.clipboard?.writeText(shareUrl)
+                            setShareNotice('공유 링크를 클립보드에 복사했습니다.')
+                          }}
+                        >
+                          복사
+                        </button>
+                        {status === 'ACTIVE' && (
+                          <button
+                            type="button"
+                            className="trip-action-btn danger compact"
+                            onClick={() => handleRevokeShareLink(shareId)}
+                            disabled={pendingShareActionId === shareId}
+                          >
+                            {pendingShareActionId === shareId ? '처리 중...' : '철회'}
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
 
           <article className="trip-detail-card">
             <button
@@ -2240,39 +2531,116 @@ function TripViewPage({ trip, currentUser, onBackToTrips, onOpenEditTrip, onAddT
 
           <div className="trip-invite-panel">
             <div className="trip-invite-head">
-              <h4>참여자 목록</h4>
-              <span>현재 참여 인원 {trip.members}명</span>
+              <h4>그룹 멤버 관리</h4>
+              <span>
+                현재 그룹 인원 {trip.members}명 · 내 권한 {canManageGroup ? 'OWNER' : 'MEMBER'}
+              </span>
             </div>
-            <form className="trip-invite-form" onSubmit={handleAddTripInvite}>
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                placeholder="추가할 사람 이메일"
-              />
-              <button type="submit" className="trip-action-btn ghost">
-                사람 추가
-              </button>
-            </form>
+            {canManageGroup ? (
+              <form className="trip-invite-form" onSubmit={handleAddTripInvite}>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  placeholder="초대할 사람 이메일"
+                />
+                <button type="submit" className="trip-action-btn ghost">
+                  초대 보내기
+                </button>
+              </form>
+            ) : (
+              <p className="trip-invite-empty">그룹 OWNER만 초대 링크 발송과 권한 변경을 할 수 있습니다.</p>
+            )}
             {inviteError && <p className="trip-invite-error">{inviteError}</p>}
             {inviteNotice && <p className="trip-invite-notice">{inviteNotice}</p>}
+            {memberActionError && <p className="trip-invite-error">{memberActionError}</p>}
+            {memberActionNotice && <p className="trip-invite-notice">{memberActionNotice}</p>}
             {tripParticipants.length > 0 ? (
               <ul className="trip-invite-list">
                 {tripParticipants.map((person) => (
                   <li key={person.id}>
-                    <strong>
-                      {person.name}
-                      <small className="trip-participant-role">
-                        {String(person.role ?? '').toUpperCase() === 'OWNER' ? '여행장' : '참여자'}
-                      </small>
-                    </strong>
-                    <span>{person.email}</span>
+                    <div className="group-member-summary">
+                      <strong>
+                        {person.name}
+                        <small className="trip-participant-role">
+                          {String(person.role ?? '').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER'}
+                        </small>
+                      </strong>
+                      <span>{person.email}</span>
+                    </div>
+                    {canManageGroup && person.email !== currentUserEmail ? (
+                      <div className="group-member-actions">
+                        <select
+                          value={String(person.role ?? '').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER'}
+                          onChange={(event) => handleMemberRoleChange(person.id, event.target.value)}
+                          disabled={pendingGroupActionKey.length > 0}
+                        >
+                          <option value="OWNER">OWNER</option>
+                          <option value="MEMBER">MEMBER</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="trip-action-btn danger compact"
+                          onClick={() => handleRemoveMember(person)}
+                          disabled={pendingGroupActionKey.length > 0}
+                        >
+                          제외
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="group-member-actions readonly">
+                        <small>{person.email === currentUserEmail ? '현재 로그인 계정' : '권한 변경 불가'}</small>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="trip-invite-empty">아직 참여자가 없습니다. 이메일을 입력해서 멤버를 추가해보세요.</p>
+              <p className="trip-invite-empty">아직 그룹 멤버가 없습니다.</p>
             )}
+
+            <div className="group-pending-invites">
+              <div className="trip-invite-head compact">
+                <h4>대기 중인 초대</h4>
+                <span>{groupInvites.filter((invite) => invite.status === 'PENDING').length}건</span>
+              </div>
+              {groupInvites.filter((invite) => invite.status === 'PENDING').length > 0 ? (
+                <ul className="trip-invite-list group-invite-list">
+                  {groupInvites
+                    .filter((invite) => invite.status === 'PENDING')
+                    .map((invite) => (
+                      <li key={invite.id}>
+                        <div className="group-member-summary">
+                          <strong>{invite.name}</strong>
+                          <span>{invite.email}</span>
+                          <small>
+                            만료: {invite.expiresAt ? new Date(invite.expiresAt).toLocaleString() : '미정'}
+                          </small>
+                          {invite.shareUrl && (
+                            <a href={invite.shareUrl} className="group-invite-link">
+                              초대 링크 열기
+                            </a>
+                          )}
+                        </div>
+                        {canManageGroup && (
+                          <div className="group-member-actions">
+                            <button
+                              type="button"
+                              className="trip-action-btn danger compact"
+                              onClick={() => handleRevokeInvite(invite)}
+                              disabled={pendingGroupActionKey.length > 0}
+                            >
+                              초대 취소
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className="trip-invite-empty">현재 대기 중인 그룹 초대가 없습니다.</p>
+              )}
+            </div>
           </div>
 
           <div className="trip-pin-list">
@@ -3065,8 +3433,6 @@ function TripEditView({ trip, onUpdateTrip }) {
     }
 
     const dateRange = `${tripForm.startDate.replaceAll('-', '.')} - ${tripForm.endDate.replaceAll('-', '.')}`
-    const fallbackCover =
-      'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=900&q=80'
     const nextPhotoPreviews = editablePhotos.map((photo) => photo.preview)
     const hadActualPhotoPreviews = Array.isArray(trip.photoPreviews) && trip.photoPreviews.length > 0
 
@@ -3083,7 +3449,7 @@ function TripEditView({ trip, onUpdateTrip }) {
         members: Number(tripForm.members),
         type: tripForm.type,
         pinColor: normalizeTripPinColor(tripForm.pinColor, getDefaultTripPinColor(tripForm.type)),
-        cover: resolvedCover || nextPhotoPreviews[0] || trip.cover || fallbackCover,
+        cover: resolvedCover || nextPhotoPreviews[0] || trip.cover || '',
         notes: tripForm.notes.trim(),
         photos: nextPhotoCount,
         photoPreviews: nextPhotoPreviews,
@@ -3342,13 +3708,24 @@ function PlacesView({ places, placeReviews, onOpenPlaceView }) {
     const summary = new Map()
     visiblePlaces.forEach((place) => {
       const reviews = normalizePlaceReviewList(placeReviews?.[place.id], place.id)
+      const serverCount = Number(place?.reviewCount)
+      const serverAverage = Number(place?.averageRating)
+      const fallbackCount = reviews.length
+      const fallbackAverage = getPlaceAverageRating(reviews)
+      const count = Number.isFinite(serverCount) ? Math.max(0, Math.floor(serverCount)) : fallbackCount
+      const average = Number.isFinite(serverAverage) ? Math.max(0, Math.min(5, serverAverage)) : fallbackAverage
       summary.set(place.id, {
-        count: reviews.length,
-        average: getPlaceAverageRating(reviews),
+        count,
+        average,
       })
     })
     return summary
   }, [placeReviews, visiblePlaces])
+
+  const sponsoredShowcasePlaces = useMemo(() => {
+    const sponsored = filteredPlaces.filter((place) => place.isSponsored === true)
+    return pickRandomItems(sponsored, 5)
+  }, [filteredPlaces])
 
   return (
     <section className="single-grid appear">
@@ -3375,21 +3752,41 @@ function PlacesView({ places, placeReviews, onOpenPlaceView }) {
           </label>
         </div>
 
+        {sponsoredShowcasePlaces.length > 0 && (
+          <section className="sponsored-showcase">
+            <div className="sponsored-showcase-head">
+              <h4>지금 뜨는 제휴 장소</h4>
+              <small>검색 결과 중 랜덤 5곳</small>
+            </div>
+            <div className="sponsored-showcase-list">
+              {sponsoredShowcasePlaces.map((place) => (
+                <button
+                  key={`sponsored-${place.id}`}
+                  type="button"
+                  className="sponsored-showcase-item"
+                  aria-label={`${place.name} 상세 보기`}
+                  onClick={() => onOpenPlaceView(place.id)}
+                >
+                  <img src={place.image} alt={place.name} />
+                  <div className="sponsored-showcase-main">
+                    <SponsoredBadge />
+                    <strong>{place.name}</strong>
+                    <span>{place.region}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="place-list">
           {filteredPlaces.map((place) => (
-            <article
+            <button
               key={place.id}
+              type="button"
               className="place-row is-clickable"
-              role="button"
-              tabIndex={0}
               aria-label={`${place.name} 상세 보기`}
               onClick={() => onOpenPlaceView(place.id)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  onOpenPlaceView(place.id)
-                }
-              }}
             >
               <img src={place.image} alt={place.name} />
               <div className="place-row-main">
@@ -3418,7 +3815,7 @@ function PlacesView({ places, placeReviews, onOpenPlaceView }) {
                     : '후기 없음'}
                 </span>
               </aside>
-            </article>
+            </button>
           ))}
         </div>
 
@@ -3428,14 +3825,17 @@ function PlacesView({ places, placeReviews, onOpenPlaceView }) {
   )
 }
 
-function PlaceViewPage({ place, reviews, onAddReview, onBackToPlaces }) {
-  const [selectedImage, setSelectedImage] = useState('')
+function PlaceViewPage({ place, reviews, onAddReview, onReportReview, onBackToPlaces }) {
+  const [selectedImage, setSelectedImage] = useState(() => getInitialSelectedPlaceImage(place))
   const [reviewForm, setReviewForm] = useState({
     author: '',
     rating: 5,
     comment: '',
   })
   const [reviewError, setReviewError] = useState('')
+  const [mapError, setMapError] = useState('')
+  const [resolvedCoordinates, setResolvedCoordinates] = useState(null)
+  const mapRef = useRef(null)
 
   const galleryImages = useMemo(() => {
     if (!place) {
@@ -3451,16 +3851,11 @@ function PlaceViewPage({ place, reviews, onAddReview, onBackToPlaces }) {
     [place?.id, reviews],
   )
   const averageRating = useMemo(() => getPlaceAverageRating(normalizedReviews), [normalizedReviews])
-
-  useEffect(() => {
-    setSelectedImage(galleryImages[0] ?? '')
-    setReviewForm({
-      author: '',
-      rating: 5,
-      comment: '',
-    })
-    setReviewError('')
-  }, [place?.id, galleryImages])
+  const hasCoordinates =
+    Number.isFinite(resolvedCoordinates?.latitude) &&
+    Number.isFinite(resolvedCoordinates?.longitude) &&
+    Math.abs(resolvedCoordinates.latitude) <= 90 &&
+    Math.abs(resolvedCoordinates.longitude) <= 180
 
   const renderStars = (rating, prefix) =>
     Array.from({ length: 5 }, (_, index) => (
@@ -3469,7 +3864,7 @@ function PlaceViewPage({ place, reviews, onAddReview, onBackToPlaces }) {
       </span>
     ))
 
-  const handleSubmitReview = (event) => {
+  const handleSubmitReview = async (event) => {
     event.preventDefault()
     if (!place || typeof onAddReview !== 'function') {
       return
@@ -3481,20 +3876,167 @@ function PlaceViewPage({ place, reviews, onAddReview, onBackToPlaces }) {
       return
     }
 
-    onAddReview(place.id, {
-      author: reviewForm.author.trim() || '익명 사용자',
-      rating: normalizeReviewRating(reviewForm.rating),
-      comment,
-      createdAt: new Date().toISOString(),
-    })
+    try {
+      await onAddReview(place.id, {
+        author: reviewForm.author.trim() || '익명 사용자',
+        rating: normalizeReviewRating(reviewForm.rating),
+        comment,
+        createdAt: new Date().toISOString(),
+      })
 
-    setReviewForm((prev) => ({
-      ...prev,
-      rating: 5,
-      comment: '',
-    }))
-    setReviewError('')
+      setReviewForm((prev) => ({
+        ...prev,
+        rating: 5,
+        comment: '',
+      }))
+      setReviewError('')
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : '후기 저장에 실패했습니다.')
+    }
   }
+
+  const handleReportReview = async (review) => {
+    if (!place || typeof onReportReview !== 'function') {
+      return
+    }
+    const reason = window.prompt('신고 사유를 입력해주세요.')
+    const normalizedReason = String(reason ?? '').trim()
+    if (normalizedReason.length < 3) {
+      return
+    }
+    try {
+      await onReportReview(place.id, review.id, normalizedReason)
+      window.alert('후기 신고가 접수되었습니다.')
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '후기 신고에 실패했습니다.')
+    }
+  }
+
+  useEffect(() => {
+    let isActive = true
+
+    const resolveCoordinatesFromAddress = async () => {
+      if (!place) {
+        setResolvedCoordinates(null)
+        return
+      }
+
+      const storedLatitude = normalizeCoordinateValue(place.latitude)
+      const storedLongitude = normalizeCoordinateValue(place.longitude)
+      if (
+        Number.isFinite(storedLatitude) &&
+        Number.isFinite(storedLongitude) &&
+        Math.abs(storedLatitude) <= 90 &&
+        Math.abs(storedLongitude) <= 180
+      ) {
+        setResolvedCoordinates({
+          latitude: storedLatitude,
+          longitude: storedLongitude,
+          source: 'stored',
+        })
+        return
+      }
+
+      setResolvedCoordinates(null)
+
+      try {
+        const kakao = await loadKakaoMapSdk(KAKAO_MAP_API_KEY)
+        if (!isActive) {
+          return
+        }
+        if (!kakao?.maps?.services?.Geocoder || !kakao?.maps?.services?.Status) {
+          return
+        }
+
+        const geocoder = new kakao.maps.services.Geocoder()
+        const addressCandidates = []
+        const description = String(place.description ?? '')
+        const addressMatch = description.match(/주소:\s*([^·\n]+)/)
+        if (addressMatch?.[1]) {
+          addressCandidates.push(addressMatch[1].trim())
+        }
+        addressCandidates.push(`${String(place.region ?? '').trim()} ${String(place.name ?? '').trim()}`.trim())
+
+        for (const query of addressCandidates.filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index)) {
+          const result = await new Promise((resolve) => {
+            geocoder.addressSearch(query, (items, status) => {
+              if (status !== kakao.maps.services.Status.OK || !Array.isArray(items) || items.length === 0) {
+                resolve(null)
+                return
+              }
+              const firstItem = items[0]
+              const latitude = Number(firstItem?.y)
+              const longitude = Number(firstItem?.x)
+              if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                resolve(null)
+                return
+              }
+              resolve({ latitude, longitude })
+            })
+          })
+
+          if (result && isActive) {
+            setResolvedCoordinates({
+              ...result,
+              source: 'geocoded',
+            })
+            return
+          }
+        }
+      } catch {
+        // Ignore geocoding fallback errors. UI will show unavailable map state.
+      }
+    }
+
+    resolveCoordinatesFromAddress()
+
+    return () => {
+      isActive = false
+    }
+  }, [place?.id, place?.latitude, place?.longitude, place?.description, place?.region, place?.name])
+
+  useEffect(() => {
+    let isActive = true
+    let marker = null
+
+    const renderPlaceMap = async () => {
+      if (!place || !hasCoordinates || !mapRef.current) {
+        setMapError('')
+        return
+      }
+
+      try {
+        const kakao = await loadKakaoMapSdk(KAKAO_MAP_API_KEY)
+        if (!isActive || !mapRef.current) {
+          return
+        }
+
+        const center = new kakao.maps.LatLng(resolvedCoordinates.latitude, resolvedCoordinates.longitude)
+        const map = new kakao.maps.Map(mapRef.current, {
+          center,
+          level: 3,
+        })
+        marker = new kakao.maps.Marker({
+          position: center,
+        })
+        marker.setMap(map)
+        setMapError('')
+      } catch (error) {
+        if (isActive) {
+          setMapError(error instanceof Error ? error.message : '장소 지도를 불러오지 못했습니다.')
+        }
+      }
+    }
+
+    renderPlaceMap()
+
+    return () => {
+      isActive = false
+      if (marker) {
+        marker.setMap(null)
+      }
+    }
+  }, [place?.id, resolvedCoordinates?.latitude, resolvedCoordinates?.longitude, hasCoordinates])
 
   if (!place) {
     return (
@@ -3546,6 +4088,31 @@ function PlaceViewPage({ place, reviews, onAddReview, onBackToPlaces }) {
             )}
           </div>
         </article>
+
+        <section className="place-map-panel">
+          <h4>카카오맵 위치</h4>
+          {hasCoordinates ? (
+            <>
+              <div ref={mapRef} className="kakao-map place-detail-map" />
+              <div className="place-map-meta">
+                <span>
+                  위도 {resolvedCoordinates.latitude.toFixed(6)} / 경도 {resolvedCoordinates.longitude.toFixed(6)}
+                  {resolvedCoordinates.source === 'geocoded' ? ' (주소 기반 추정)' : ''}
+                </span>
+                <a
+                  href={`https://map.kakao.com/link/map/${encodeURIComponent(place.name)},${resolvedCoordinates.latitude},${resolvedCoordinates.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  카카오맵에서 크게 보기
+                </a>
+              </div>
+            </>
+          ) : (
+            <p className="trip-create-caption">좌표 정보가 없어 지도를 표시할 수 없습니다.</p>
+          )}
+          {mapError && <p className="auth-notice error">{mapError}</p>}
+        </section>
 
         <section className="place-gallery-panel">
           <h4>추가 이미지</h4>
@@ -3609,6 +4176,9 @@ function PlaceViewPage({ place, reviews, onAddReview, onBackToPlaces }) {
                     <small>{new Date(review.createdAt).toLocaleDateString('ko-KR')}</small>
                   </div>
                   <p>{review.comment}</p>
+                  <button type="button" className="trip-action-btn ghost compact" onClick={() => handleReportReview(review)}>
+                    신고
+                  </button>
                 </article>
               ))
             ) : (
@@ -3616,6 +4186,254 @@ function PlaceViewPage({ place, reviews, onAddReview, onBackToPlaces }) {
             )}
           </div>
         </section>
+      </article>
+    </section>
+  )
+}
+
+function InviteAcceptView({ inviteCode, invitePreview, loading, loadError, currentUser, onAcceptInvite }) {
+  const [submitError, setSubmitError] = useState('')
+  const [submitNotice, setSubmitNotice] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    setSubmitError('')
+    setSubmitNotice('')
+    setIsSubmitting(false)
+  }, [inviteCode])
+
+  const handleAccept = async () => {
+    if (!inviteCode || typeof onAcceptInvite !== 'function') {
+      return
+    }
+
+    setSubmitError('')
+    setSubmitNotice('')
+    setIsSubmitting(true)
+    try {
+      const result = await onAcceptInvite(inviteCode)
+      const groupId = String(result?.groupId ?? '').trim()
+      setSubmitNotice(groupId.length > 0 ? '그룹 초대를 수락했습니다. 내 여행 목록으로 이동합니다.' : '그룹 초대를 수락했습니다.')
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : '그룹 초대 수락에 실패했습니다.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (!inviteCode) {
+    return (
+      <section className="single-grid appear">
+        <article className="surface-panel info-panel trip-create">
+          <h3>초대 코드가 올바르지 않습니다.</h3>
+          <p className="trip-create-caption">전달받은 링크를 다시 확인해주세요.</p>
+        </article>
+      </section>
+    )
+  }
+
+  return (
+    <section className="single-grid appear">
+      <article className="surface-panel info-panel trip-create">
+        <h3>그룹 초대 수락</h3>
+        <p className="trip-create-caption">공유 여행 그룹에 참여하려면 초대 내용을 확인한 뒤 수락하세요.</p>
+
+        {loading ? (
+          <p className="trip-create-caption">초대 정보를 불러오는 중입니다.</p>
+        ) : loadError ? (
+          <p className="trip-invite-error">{loadError}</p>
+        ) : invitePreview ? (
+          <div className="trip-invite-panel">
+            <div className="trip-invite-head">
+              <h4>{invitePreview.groupName || 'Soonmile 그룹'}</h4>
+              <span>{invitePreview.status === 'ACCEPTED' ? '수락 완료' : invitePreview.status === 'EXPIRED' ? '만료됨' : '수락 대기중'}</span>
+            </div>
+            <div className="group-invite-preview-grid">
+              <div>
+                <strong>초대 대상</strong>
+                <span>{invitePreview.invitedEmail}</span>
+              </div>
+              <div>
+                <strong>만료 시각</strong>
+                <span>{invitePreview.expiresAt ? new Date(invitePreview.expiresAt).toLocaleString() : '미정'}</span>
+              </div>
+            </div>
+
+            {!currentUser ? (
+              <p className="trip-invite-empty">초대를 수락하려면 먼저 로그인해주세요. 로그인 후 다시 이 화면에서 수락할 수 있습니다.</p>
+            ) : invitePreview.status === 'ACCEPTED' ? (
+              <p className="trip-invite-notice">이미 수락된 초대입니다. 내 여행 목록에서 그룹 여행을 확인해보세요.</p>
+            ) : invitePreview.status === 'EXPIRED' ? (
+              <p className="trip-invite-error">만료된 초대입니다. 그룹 OWNER에게 새 초대를 요청해주세요.</p>
+            ) : (
+              <>
+                <p className="trip-invite-empty">현재 로그인 계정: {currentUser.email}</p>
+                <button type="button" className="trip-action-btn submit" onClick={handleAccept} disabled={isSubmitting}>
+                  {isSubmitting ? '수락 중...' : '초대 수락하기'}
+                </button>
+              </>
+            )}
+
+            {submitError && <p className="trip-invite-error">{submitError}</p>}
+            {submitNotice && <p className="trip-invite-notice">{submitNotice}</p>}
+          </div>
+        ) : (
+          <p className="trip-create-caption">초대 정보를 찾지 못했습니다.</p>
+        )}
+      </article>
+    </section>
+  )
+}
+
+function TripShareView({ shareToken, tripPreview, loading, loadError }) {
+  const mapRef = useRef(null)
+  const mapObjRef = useRef(null)
+  const markerRef = useRef([])
+  const [mapReady, setMapReady] = useState(false)
+  const [mapError, setMapError] = useState('')
+
+  const sharePins = useMemo(
+    () => (Array.isArray(tripPreview?.pins) ? tripPreview.pins : []).filter((pin) => Number.isFinite(Number(pin?.lat)) && Number.isFinite(Number(pin?.lng))),
+    [tripPreview],
+  )
+  const representativePhotoUrl = useMemo(() => resolveMediaUrl(String(tripPreview?.representativePhotoUrl ?? '').trim()), [tripPreview])
+
+  useEffect(() => {
+    if (!tripPreview || loading) {
+      setMapReady(false)
+      setMapError('')
+      return
+    }
+
+    if (sharePins.length === 0) {
+      setMapReady(false)
+      setMapError('표시할 핀이 없습니다.')
+      return
+    }
+
+    let isActive = true
+
+    const initMap = async () => {
+      try {
+        const kakao = await loadKakaoMapSdk(KAKAO_MAP_API_KEY)
+        if (!isActive || !mapRef.current) {
+          return
+        }
+
+        const firstPin = sharePins[0]
+        const center = new kakao.maps.LatLng(Number(firstPin.lat), Number(firstPin.lng))
+        const map = mapObjRef.current
+          ?? new kakao.maps.Map(mapRef.current, {
+            center,
+            level: 8,
+          })
+
+        mapObjRef.current = map
+        markerRef.current.forEach((marker) => marker.setMap(null))
+
+        const bounds = new kakao.maps.LatLngBounds()
+        markerRef.current = sharePins.map((pin) => {
+          const position = new kakao.maps.LatLng(Number(pin.lat), Number(pin.lng))
+          bounds.extend(position)
+          const marker = new kakao.maps.Marker({
+            position,
+            image: buildMarkerImage(kakao, normalizeTripPinColor(tripPreview?.pinColor, TRIP_PIN_COLOR_GROUP_DEFAULT)),
+            title: String(pin?.title ?? '').trim() || '핀',
+          })
+          marker.setMap(map)
+          return marker
+        })
+
+        if (sharePins.length === 1) {
+          map.setCenter(bounds.getCenter())
+          map.setLevel(5)
+        } else {
+          map.setBounds(bounds)
+        }
+
+        setMapError('')
+        setMapReady(true)
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+        setMapReady(false)
+        setMapError(error instanceof Error ? error.message : '공유 지도 정보를 불러오지 못했습니다.')
+      }
+    }
+
+    initMap()
+
+    return () => {
+      isActive = false
+    }
+  }, [loading, sharePins, tripPreview])
+
+  if (!shareToken) {
+    return (
+      <section className="single-grid appear">
+        <article className="surface-panel info-panel trip-create">
+          <h3>공유 링크가 올바르지 않습니다.</h3>
+          <p className="trip-create-caption">전달받은 공유 링크를 다시 확인해주세요.</p>
+        </article>
+      </section>
+    )
+  }
+
+  return (
+    <section className="single-grid appear">
+      <article className="surface-panel info-panel">
+        <h3>공유 여행 보기</h3>
+        {loading ? (
+          <p className="trip-create-caption">공유 여행 정보를 불러오는 중입니다.</p>
+        ) : loadError ? (
+          <p className="trip-invite-error">{loadError}</p>
+        ) : tripPreview ? (
+          <div className="trip-detail">
+            <div className="trip-detail-card">
+              {representativePhotoUrl ? (
+                <img src={representativePhotoUrl} alt={`${tripPreview.name} 대표 사진`} />
+              ) : (
+                <div className="trip-detail-main">
+                  <p className="trip-create-caption">대표 사진이 없습니다.</p>
+                </div>
+              )}
+              <div className="trip-detail-main">
+                <h4>{tripPreview.name}</h4>
+                <p className="trip-create-caption">{buildDateRangeLabel(tripPreview.startDate, tripPreview.endDate) || '일정 정보 없음'}</p>
+                <div className="trip-detail-stats">
+                  <span>핀 {sharePins.length}개</span>
+                  <span>경로 {Array.isArray(tripPreview.route) ? tripPreview.route.length : 0}개</span>
+                  <span>미분류 사진 {Number(tripPreview.unresolvedPhotoCount) || 0}장</span>
+                  <span>업데이트 {tripPreview.updatedAt ? new Date(tripPreview.updatedAt).toLocaleString('ko-KR') : '미정'}</span>
+                </div>
+              </div>
+            </div>
+
+        <div className="map-wrap trip-map-wrap">
+              <div ref={mapRef} className="kakao-map" aria-label="공유 여행 핀 지도" />
+              {!mapReady && mapError && <div className="map-overlay map-error">{mapError}</div>}
+              {!mapReady && !mapError && <div className="map-overlay">지도를 준비하는 중...</div>}
+            </div>
+
+            {sharePins.length > 0 ? (
+              <ul className="trip-share-pin-list">
+                {sharePins.slice(0, 20).map((pin) => (
+                  <li key={pin.pinId}>
+                    <strong>{String(pin.title ?? '').trim() || '핀'}</strong>
+                    <span>
+                      사진 {Number(pin.photoCount) || 0}장 · {Number(pin.lat).toFixed(4)}, {Number(pin.lng).toFixed(4)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="trip-create-caption">공유된 핀이 없습니다.</p>
+            )}
+          </div>
+        ) : (
+          <p className="trip-create-caption">공유 여행 정보를 찾지 못했습니다.</p>
+        )}
       </article>
     </section>
   )
@@ -3657,9 +4475,13 @@ function LoginView({ onGoogleLogin, onLogout, currentUser }) {
       }
 
       try {
+        setGoogleReady(false)
         await loadGoogleIdentityScript()
-        if (disposed || !window.google?.accounts?.id) {
+        if (disposed) {
           return
+        }
+        if (!window.google?.accounts?.id) {
+          throw new Error('Google 로그인 객체를 찾지 못했습니다. 도메인 설정을 확인해주세요.')
         }
 
         window.google.accounts.id.initialize({
@@ -3681,7 +4503,7 @@ function LoginView({ onGoogleLogin, onLogout, currentUser }) {
               setGoogleSubmitting(true)
               const session = await onGoogleLoginRef.current({ idToken })
               setNotice(`${session.user.name}님, Google 로그인되었습니다.`)
-              window.location.hash = '#home'
+              setRouteHash('home')
             } catch (requestError) {
               setError(requestError instanceof Error ? requestError.message : 'Google 로그인에 실패했습니다.')
             } finally {
@@ -3690,7 +4512,6 @@ function LoginView({ onGoogleLogin, onLogout, currentUser }) {
           },
           auto_select: false,
           cancel_on_tap_outside: true,
-          use_fedcm_for_prompt: true,
         })
 
         setGoogleReady(true)
@@ -3698,6 +4519,7 @@ function LoginView({ onGoogleLogin, onLogout, currentUser }) {
         if (disposed) {
           return
         }
+        setGoogleReady(false)
         setError(requestError instanceof Error ? requestError.message : 'Google 로그인 SDK를 초기화하지 못했습니다.')
       }
     }
@@ -3719,6 +4541,16 @@ function LoginView({ onGoogleLogin, onLogout, currentUser }) {
     }
     if (!googleReady || !window.google?.accounts?.id) {
       setError('Google 로그인 초기화 중입니다. 잠시 후 다시 시도해주세요.')
+      loadGoogleIdentityScript()
+        .then(() => {
+          if (window.google?.accounts?.id) {
+            setGoogleReady(true)
+          }
+        })
+        .catch((requestError) => {
+          setGoogleReady(false)
+          setError(requestError instanceof Error ? requestError.message : 'Google 로그인 SDK를 초기화하지 못했습니다.')
+        })
       return
     }
 
@@ -3763,25 +4595,7 @@ function LoginView({ onGoogleLogin, onLogout, currentUser }) {
   )
 }
 
-function AdminLoginView({ isAdminAuthenticated, adminSession, onAdminLogin, onAdminLogout }) {
-  const [email, setEmail] = useState(ADMIN_ACCOUNT.email)
-  const [password, setPassword] = useState('')
-  const [notice, setNotice] = useState('')
-  const [error, setError] = useState('')
-
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const result = onAdminLogin(email, password)
-    if (result.ok) {
-      setError('')
-      setNotice('관리자 로그인에 성공했습니다. 백오피스로 이동합니다.')
-      return
-    }
-
-    setNotice('')
-    setError(result.message)
-  }
-
+function AdminLoginView({ isUserAuthenticated, isAdminAuthenticated, adminSession, onLogout }) {
   return (
     <section className="auth-layout appear">
       <AuthSidePanel
@@ -3799,45 +4613,25 @@ function AdminLoginView({ isAdminAuthenticated, adminSession, onAdminLogin, onAd
             <a href="#admin-dashboard" className="trip-action-btn trip-nav-link">
               백오피스로 이동
             </a>
-            <button type="button" className="trip-action-btn ghost" onClick={onAdminLogout}>
-              관리자 로그아웃
+            <button type="button" className="trip-action-btn ghost" onClick={onLogout}>
+              로그아웃
+            </button>
+          </div>
+        ) : isUserAuthenticated ? (
+          <div className="trip-detail">
+            <p className="auth-notice error">현재 계정에는 관리자 권한이 없습니다.</p>
+            <button type="button" className="trip-action-btn ghost" onClick={onLogout}>
+              로그아웃
             </button>
           </div>
         ) : (
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <label>
-              관리자 이메일
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="admin@soonmile.com"
-                required
-              />
-            </label>
-            <label>
-              비밀번호
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="관리자 비밀번호"
-                required
-              />
-            </label>
-            <button type="submit" className="auth-submit">
-              관리자 로그인
-            </button>
-          </form>
+          <div className="trip-detail">
+            <p className="auth-notice">먼저 일반 로그인 후 관리자 권한이 있는 계정으로 다시 시도해주세요.</p>
+            <a href="#login" className="trip-action-btn trip-nav-link">
+              로그인 페이지로 이동
+            </a>
+          </div>
         )}
-
-        {!isAdminAuthenticated && (
-          <p className="auth-footnote">
-            데모 계정: <strong>{ADMIN_ACCOUNT.email}</strong> / <strong>{ADMIN_ACCOUNT.password}</strong>
-          </p>
-        )}
-        {error && <p className="auth-notice error">{error}</p>}
-        {notice && <p className="auth-notice success">{notice}</p>}
       </article>
     </section>
   )
@@ -3868,7 +4662,7 @@ function AdminShell({ activeRoute, adminSession, onAdminLogout, children }) {
         </div>
         <nav className="admin-menu">
           {ADMIN_MENU_ITEMS.map((item) => (
-            <a key={item.key} href={`#${item.key}`} className={`admin-menu-link ${activeRoute === item.key ? 'is-active' : ''}`}>
+                <a key={item.key} href={toRouteHref(item.key)} className={`admin-menu-link ${activeRoute === item.key ? 'is-active' : ''}`}>
               {item.label}
             </a>
           ))}
@@ -4168,7 +4962,9 @@ function AdminPlacesManagementView({
   onAdminLogout,
   places,
   onCreatePlace,
+  onUploadPlaceImage,
   onTogglePlaceVisibility,
+  onTogglePlaceSponsored,
   onDeletePlace,
   isLoading,
   loadError,
@@ -4179,8 +4975,205 @@ function AdminPlacesManagementView({
     description: '',
     keywords: '',
     image: '',
+    latitude: '',
+    longitude: '',
+    isSponsored: false,
   })
   const [error, setError] = useState('')
+  const [kakaoSearchKeyword, setKakaoSearchKeyword] = useState('')
+  const [kakaoSearchResults, setKakaoSearchResults] = useState([])
+  const [kakaoSearchError, setKakaoSearchError] = useState('')
+  const [kakaoSearching, setKakaoSearching] = useState(false)
+  const [selectedKakaoPlaceId, setSelectedKakaoPlaceId] = useState('')
+  const [imageUploading, setImageUploading] = useState(false)
+  const [imageUploadError, setImageUploadError] = useState('')
+
+  const buildKakaoPlaceholderImage = (placeName, regionName) => {
+    const title = escapeHtml(placeName || '추천 장소')
+    const subtitle = escapeHtml(regionName || '카카오맵')
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+        <defs>
+          <linearGradient id="soonmileKakaoBg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fff1cc" />
+            <stop offset="100%" stop-color="#ffe08a" />
+          </linearGradient>
+        </defs>
+        <rect width="640" height="360" fill="url(#soonmileKakaoBg)" />
+        <circle cx="82" cy="92" r="38" fill="#ffcc00" opacity="0.72" />
+        <circle cx="560" cy="272" r="46" fill="#ffd94e" opacity="0.6" />
+        <rect x="44" y="222" width="552" height="94" rx="18" fill="rgba(0,0,0,0.18)" />
+        <text x="70" y="258" fill="#2f2300" font-size="28" font-family="Pretendard, Apple SD Gothic Neo, sans-serif" font-weight="700">${title}</text>
+        <text x="70" y="292" fill="#4f3f0a" font-size="18" font-family="Pretendard, Apple SD Gothic Neo, sans-serif">${subtitle} · Kakao Map</text>
+      </svg>
+    `.trim()
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+  }
+
+  const extractRegionFromAddress = (address) => {
+    const tokens = String(address ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter((token) => token.length > 0)
+    if (tokens.length === 0) {
+      return ''
+    }
+
+    const primaryToken = tokens[0]
+    return primaryToken
+      .replace('특별자치시', '')
+      .replace('특별자치도', '')
+      .replace('특별시', '')
+      .replace('광역시', '')
+      .replace('자치시', '')
+      .replace('도', '')
+      .trim()
+  }
+
+  const buildKeywordsFromCategory = (categoryName, regionName) => {
+    const categoryTokens = String(categoryName ?? '')
+      .split('>')
+      .flatMap((item) => item.split('/'))
+      .flatMap((item) => item.split(','))
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2)
+      .slice(0, 4)
+    const merged = Array.from(new Set([regionName, ...categoryTokens].filter((item) => String(item ?? '').trim().length > 0)))
+    return merged.slice(0, 6).join(', ')
+  }
+
+  const handleSearchKakaoPlaces = async (event) => {
+    event.preventDefault()
+    const keyword = kakaoSearchKeyword.trim()
+    if (!keyword) {
+      setKakaoSearchError('카카오맵 검색어를 입력해주세요.')
+      setKakaoSearchResults([])
+      return
+    }
+
+    setKakaoSearching(true)
+    setKakaoSearchError('')
+
+    try {
+      const kakao = await loadKakaoMapSdk(KAKAO_MAP_API_KEY)
+      if (!kakao?.maps?.services?.Places || !kakao?.maps?.services?.Status) {
+        throw new Error('카카오맵 장소 검색 서비스를 초기화하지 못했습니다.')
+      }
+
+      const placesService = new kakao.maps.services.Places()
+      const result = await new Promise((resolve, reject) => {
+        placesService.keywordSearch(
+          keyword,
+          (items, status) => {
+            if (status === kakao.maps.services.Status.OK) {
+              resolve(Array.isArray(items) ? items : [])
+              return
+            }
+            if (status === kakao.maps.services.Status.ZERO_RESULT) {
+              resolve([])
+              return
+            }
+            reject(new Error('카카오맵 장소 검색 중 오류가 발생했습니다.'))
+          },
+          {
+            size: 10,
+          },
+        )
+      })
+
+      const normalizedResults = result
+        .map((item, index) => {
+          const name = String(item.place_name ?? '').trim()
+          const roadAddress = String(item.road_address_name ?? '').trim()
+          const address = String(item.address_name ?? '').trim()
+          return {
+            id: String(item.id ?? `${item.x ?? 'x'}-${item.y ?? 'y'}-${index + 1}`),
+            name,
+            roadAddress,
+            address,
+            category: String(item.category_name ?? '').trim(),
+            phone: String(item.phone ?? '').trim(),
+            placeUrl: String(item.place_url ?? '').trim(),
+            latitude: Number(item.y),
+            longitude: Number(item.x),
+          }
+        })
+        .filter((item) => item.name.length > 0)
+
+      setKakaoSearchResults(normalizedResults)
+      setSelectedKakaoPlaceId('')
+      if (normalizedResults.length === 0) {
+        setKakaoSearchError('검색 결과가 없습니다. 다른 검색어로 시도해주세요.')
+      }
+    } catch (searchError) {
+      setKakaoSearchResults([])
+      setSelectedKakaoPlaceId('')
+      setKakaoSearchError(searchError instanceof Error ? searchError.message : '카카오맵 검색에 실패했습니다.')
+    } finally {
+      setKakaoSearching(false)
+    }
+  }
+
+  const handleSelectKakaoPlace = (place) => {
+    const region = extractRegionFromAddress(place.roadAddress || place.address) || '기타'
+    const address = place.roadAddress || place.address
+    const keywords = buildKeywordsFromCategory(place.category, region)
+    const descriptionParts = ['카카오맵 검색 결과']
+    if (address.length > 0) {
+      descriptionParts.push(`주소: ${address}`)
+    }
+    if (place.phone.length > 0) {
+      descriptionParts.push(`전화: ${place.phone}`)
+    }
+
+    const placeholderImage = buildKakaoPlaceholderImage(place.name, region)
+    setSelectedKakaoPlaceId(place.id)
+    setNewPlace((prev) => {
+      const previousImage = String(prev.image ?? '').trim()
+      const shouldReplaceImage = previousImage.length === 0 || previousImage.startsWith('data:image/svg+xml')
+      return {
+        ...prev,
+        name: place.name,
+        region,
+        description: descriptionParts.join(' · '),
+        keywords,
+        image: shouldReplaceImage ? placeholderImage : previousImage,
+        latitude: Number.isFinite(place.latitude) ? String(place.latitude) : '',
+        longitude: Number.isFinite(place.longitude) ? String(place.longitude) : '',
+      }
+    })
+    setError('')
+  }
+
+  const handleUploadPlaceImage = async (event) => {
+    const selectedFile = event.target.files?.[0]
+    event.target.value = ''
+    if (!selectedFile) {
+      return
+    }
+    if (typeof onUploadPlaceImage !== 'function') {
+      setImageUploadError('이미지 업로드 기능을 사용할 수 없습니다.')
+      return
+    }
+
+    setImageUploading(true)
+    setImageUploadError('')
+    try {
+      const uploadedImageUrl = await onUploadPlaceImage(selectedFile)
+      if (!uploadedImageUrl) {
+        throw new Error('이미지 업로드 응답이 올바르지 않습니다.')
+      }
+      setNewPlace((prev) => ({
+        ...prev,
+        image: uploadedImageUrl,
+      }))
+      setError('')
+    } catch (uploadError) {
+      setImageUploadError(uploadError instanceof Error ? uploadError.message : '이미지 업로드에 실패했습니다.')
+    } finally {
+      setImageUploading(false)
+    }
+  }
 
   const handleCreatePlace = async (event) => {
     event.preventDefault()
@@ -4190,16 +5183,41 @@ function AdminPlacesManagementView({
       return
     }
 
-    if (!newPlace.image.trim()) {
-      setError('대표 이미지 URL을 입력해주세요.')
+    const imageValue = newPlace.image.trim()
+    if (!imageValue) {
+      setError('대표 이미지를 입력하거나 업로드해주세요.')
       return
     }
 
-    try {
-      new URL(newPlace.image.trim())
-    } catch {
-      setError('올바른 URL 형식의 이미지를 입력해주세요.')
+    if (!imageValue.startsWith('/uploads/') && !imageValue.startsWith('data:image/')) {
+      try {
+        new URL(imageValue)
+      } catch {
+        setError('올바른 URL 형식의 이미지를 입력해주세요.')
+        return
+      }
+    }
+
+    const latitudeRaw = newPlace.latitude.trim()
+    const longitudeRaw = newPlace.longitude.trim()
+    if ((latitudeRaw.length > 0 && longitudeRaw.length === 0) || (latitudeRaw.length === 0 && longitudeRaw.length > 0)) {
+      setError('좌표를 저장하려면 위도/경도를 모두 입력해주세요.')
       return
+    }
+
+    let latitude = null
+    let longitude = null
+    if (latitudeRaw.length > 0 && longitudeRaw.length > 0) {
+      latitude = Number(latitudeRaw)
+      longitude = Number(longitudeRaw)
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        setError('좌표는 숫자 형식으로 입력해주세요.')
+        return
+      }
+      if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        setError('좌표 범위를 확인해주세요. (위도 -90~90, 경도 -180~180)')
+        return
+      }
     }
 
     try {
@@ -4211,9 +5229,11 @@ function AdminPlacesManagementView({
           .split(',')
           .map((item) => item.trim())
           .filter((item) => item.length > 0),
-        image: newPlace.image.trim(),
+        image: imageValue,
+        latitude,
+        longitude,
         isVisible: true,
-        isSponsored: false,
+        isSponsored: newPlace.isSponsored === true,
       })
 
       setNewPlace({
@@ -4222,6 +5242,9 @@ function AdminPlacesManagementView({
         description: '',
         keywords: '',
         image: '',
+        latitude: '',
+        longitude: '',
+        isSponsored: false,
       })
       setError('')
     } catch (createError) {
@@ -4237,6 +5260,41 @@ function AdminPlacesManagementView({
         <p className="label">Places Management</p>
         <h2>추천장소 관리</h2>
       </div>
+
+      <form className="admin-kakao-search-form" onSubmit={handleSearchKakaoPlaces}>
+        <input
+          type="text"
+          value={kakaoSearchKeyword}
+          onChange={(event) => setKakaoSearchKeyword(event.target.value)}
+          placeholder="카카오맵에서 장소 검색 (예: 성수 카페)"
+        />
+        <button type="submit" className="trip-action-btn ghost" disabled={kakaoSearching}>
+          {kakaoSearching ? '검색 중...' : '카카오맵 검색'}
+        </button>
+      </form>
+      {kakaoSearchError && <p className="auth-notice error">{kakaoSearchError}</p>}
+      {kakaoSearchResults.length > 0 && (
+        <ul className="admin-kakao-search-results">
+          {kakaoSearchResults.map((place) => (
+            <li key={place.id}>
+              <button
+                type="button"
+                className={`admin-kakao-search-item ${selectedKakaoPlaceId === place.id ? 'is-active' : ''}`}
+                onClick={() => handleSelectKakaoPlace(place)}
+              >
+                <strong>{place.name}</strong>
+                <span>{place.roadAddress || place.address || '주소 정보 없음'}</span>
+                {(place.category || place.phone) && <small>{[place.category, place.phone].filter(Boolean).join(' · ')}</small>}
+              </button>
+              {place.placeUrl && (
+                <a href={place.placeUrl} target="_blank" rel="noreferrer" className="admin-kakao-search-link">
+                  카카오맵에서 보기
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <form className="admin-place-form" onSubmit={handleCreatePlace}>
         <input
@@ -4263,6 +5321,37 @@ function AdminPlacesManagementView({
           onChange={(event) => setNewPlace((prev) => ({ ...prev, image: event.target.value }))}
           placeholder="대표 이미지 URL"
         />
+        <input
+          type="number"
+          step="any"
+          value={newPlace.latitude}
+          onChange={(event) => setNewPlace((prev) => ({ ...prev, latitude: event.target.value }))}
+          placeholder="위도 (예: 37.5665)"
+        />
+        <input
+          type="number"
+          step="any"
+          value={newPlace.longitude}
+          onChange={(event) => setNewPlace((prev) => ({ ...prev, longitude: event.target.value }))}
+          placeholder="경도 (예: 126.9780)"
+        />
+        <label className="admin-place-upload-field">
+          <span>{imageUploading ? '이미지 업로드 중...' : '이미지 파일 업로드'}</span>
+          <input type="file" accept="image/*" onChange={handleUploadPlaceImage} disabled={imageUploading} />
+        </label>
+        <label className="admin-place-sponsor-toggle">
+          <input
+            type="checkbox"
+            checked={newPlace.isSponsored}
+            onChange={(event) => setNewPlace((prev) => ({ ...prev, isSponsored: event.target.checked }))}
+          />
+          <span>제휴 장소로 등록</span>
+        </label>
+        {newPlace.image.trim() && (
+          <div className="admin-place-upload-preview">
+            <img src={newPlace.image} alt="업로드 미리보기" />
+          </div>
+        )}
         <textarea
           value={newPlace.description}
           onChange={(event) => setNewPlace((prev) => ({ ...prev, description: event.target.value }))}
@@ -4273,6 +5362,7 @@ function AdminPlacesManagementView({
           장소 추가
         </button>
       </form>
+      {imageUploadError && <p className="auth-notice error">{imageUploadError}</p>}
       {error && <p className="auth-notice error">{error}</p>}
       {isLoading && <p>추천장소 목록을 불러오는 중입니다...</p>}
       {loadError && <p>추천장소 로딩 오류: {loadError}</p>}
@@ -4282,7 +5372,10 @@ function AdminPlacesManagementView({
           <article key={place.id} className="admin-place-card">
             <img src={place.image} alt={place.name} />
             <div className="admin-place-main">
-              <strong>{place.name}</strong>
+              <div className="place-title-row">
+                <strong>{place.name}</strong>
+                {place.isSponsored && <SponsoredBadge />}
+              </div>
               <p>{place.description}</p>
               <span>{place.region}</span>
               <div className="keyword-chips">
@@ -4293,6 +5386,9 @@ function AdminPlacesManagementView({
               <div className="admin-place-actions">
                 <button type="button" className="trip-action-btn ghost" onClick={() => onTogglePlaceVisibility(place.id)}>
                   {place.isVisible ? '노출 중지' : '다시 노출'}
+                </button>
+                <button type="button" className="trip-action-btn ghost" onClick={() => onTogglePlaceSponsored(place.id)}>
+                  {place.isSponsored ? '제휴 해제' : '제휴 설정'}
                 </button>
                 <button
                   type="button"
@@ -4314,44 +5410,92 @@ function AdminPlacesManagementView({
   )
 }
 
+function AdminPlaceReviewsManagementView({
+  activeRoute,
+  adminSession,
+  onAdminLogout,
+  reviews,
+  onToggleReviewHidden,
+  isLoading,
+  loadError,
+}) {
+  return (
+    <AdminShell activeRoute={activeRoute} adminSession={adminSession} onAdminLogout={onAdminLogout}>
+      <div className="admin-page-head">
+        <h2>리뷰 신고/모더레이션</h2>
+        <p>신고 수를 기준으로 부적절한 후기를 숨기거나 다시 공개할 수 있습니다.</p>
+      </div>
+      {isLoading && <p>리뷰 모더레이션 목록을 불러오는 중입니다...</p>}
+      {loadError && <p>리뷰 모더레이션 로딩 오류: {loadError}</p>}
+
+      <div className="admin-place-list">
+        {reviews.map((review) => (
+          <article key={review.reviewId} className="admin-place-card">
+            <div className="admin-place-main">
+              <div className="place-title-row">
+                <strong>{review.placeName}</strong>
+                <small>{review.isHidden ? '숨김' : '노출 중'}</small>
+              </div>
+              <p>
+                <strong>{review.author}</strong> · {review.rating}점
+              </p>
+              <p>{review.comment}</p>
+              <span>신고 {Number(review.pendingReportCount) || 0}건</span>
+              {review.hiddenReason && <small>숨김 사유: {review.hiddenReason}</small>}
+              <div className="admin-place-actions">
+                <button
+                  type="button"
+                  className="trip-action-btn ghost"
+                  onClick={() => onToggleReviewHidden(review.reviewId, review.isHidden !== true)}
+                >
+                  {review.isHidden ? '다시 공개' : '숨김 처리'}
+                </button>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+      {reviews.length === 0 && !isLoading && !loadError && <p className="empty-state">모더레이션 대상 리뷰가 없습니다.</p>}
+    </AdminShell>
+  )
+}
+
 function App() {
   const [activeRoute, setActiveRoute] = useState(getRouteFromHash())
   const [trips, setTrips] = useState([])
   const [tripsLoading, setTripsLoading] = useState(false)
   const [tripsLoadError, setTripsLoadError] = useState('')
-  const [recommendedPlaces, setRecommendedPlaces] = useState(() => normalizeRecommendedPlaces(RECOMMENDED_PLACES))
+  const [recommendedPlaces, setRecommendedPlaces] = useState([])
   const [placesLoading, setPlacesLoading] = useState(false)
   const [placesLoadError, setPlacesLoadError] = useState('')
-  const [placeReviews, setPlaceReviews] = useState(() => {
-    const seededReviews = {}
-    normalizeRecommendedPlaces(RECOMMENDED_PLACES).forEach((place) => {
-      seededReviews[place.id] = normalizePlaceReviewList(PLACE_REVIEWS_SEED[place.id], place.id)
-    })
-    return seededReviews
-  })
-  const [adminUsers, setAdminUsers] = useState(() => normalizeAdminUsers(ADMIN_USERS_SEED, ADMIN_USERS_SEED))
+  const [placeReviews, setPlaceReviews] = useState({})
+  const [adminUsers, setAdminUsers] = useState([])
   const [adminUsersLoading, setAdminUsersLoading] = useState(false)
   const [adminUsersLoadError, setAdminUsersLoadError] = useState('')
   const [viewingTripId, setViewingTripId] = useState(getTripIdFromHash())
-  const [viewingPlaceId, setViewingPlaceId] = useState(null)
+  const [viewingInviteCode, setViewingInviteCode] = useState(getInviteCodeFromHash())
+  const [viewingTripShareToken, setViewingTripShareToken] = useState(getTripShareTokenFromHash())
+  const [viewingPlaceId, setViewingPlaceId] = useState(getPlaceIdFromHash())
   const [editingTripId, setEditingTripId] = useState(null)
-  const [adminSession, setAdminSession] = useState(() => {
-    try {
-      const raw = window.localStorage.getItem(ADMIN_SESSION_KEY)
-      if (!raw) {
-        return null
-      }
-
-      const parsed = JSON.parse(raw)
-      if (parsed && parsed.role === 'ADMIN' && typeof parsed.email === 'string') {
-        return parsed
-      }
-    } catch {
-      return null
-    }
-
-    return null
-  })
+  const [invitePreview, setInvitePreview] = useState(null)
+  const [invitePreviewLoading, setInvitePreviewLoading] = useState(false)
+  const [invitePreviewError, setInvitePreviewError] = useState('')
+  const [tripSharePreview, setTripSharePreview] = useState(null)
+  const [tripSharePreviewLoading, setTripSharePreviewLoading] = useState(false)
+  const [tripSharePreviewError, setTripSharePreviewError] = useState('')
+  const [notifications, setNotifications] = useState([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationsLoadError, setNotificationsLoadError] = useState('')
+  const [notificationsFilter, setNotificationsFilter] = useState('ALL')
+  const [notificationsHasNext, setNotificationsHasNext] = useState(false)
+  const [notificationsPage, setNotificationsPage] = useState(0)
+  const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0)
+  const [isNotificationPopoverOpen, setIsNotificationPopoverOpen] = useState(false)
+  const [moderationReviews, setModerationReviews] = useState([])
+  const [moderationReviewsLoading, setModerationReviewsLoading] = useState(false)
+  const [moderationReviewsError, setModerationReviewsError] = useState('')
+  const notificationPopoverRef = useRef(null)
+  const refreshSessionPromiseRef = useRef(null)
   const [userSession, setUserSession] = useState(() => {
     try {
       const raw = window.localStorage.getItem(USER_SESSION_KEY)
@@ -4363,31 +5507,30 @@ function App() {
       return null
     }
   })
+  const [authBootstrapStatus, setAuthBootstrapStatus] = useState(() =>
+    normalizeUserSession(userSession) ? 'pending' : 'ready',
+  )
+  const [authBootstrapRetryNonce, setAuthBootstrapRetryNonce] = useState(0)
 
   useEffect(() => {
     const handleHashChange = () => {
       const nextRoute = getRouteFromHash()
       setActiveRoute(nextRoute)
       setViewingTripId(getTripIdFromHash())
+      setViewingInviteCode(getInviteCodeFromHash())
+      setViewingTripShareToken(getTripShareTokenFromHash())
+      setViewingPlaceId(getPlaceIdFromHash())
     }
     window.addEventListener('hashchange', handleHashChange)
 
     if (!window.location.hash) {
-      window.location.hash = '#home'
+      setRouteHash('home')
     }
 
     return () => {
       window.removeEventListener('hashchange', handleHashChange)
     }
   }, [])
-
-  useEffect(() => {
-    if (adminSession) {
-      window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(adminSession))
-      return
-    }
-    window.localStorage.removeItem(ADMIN_SESSION_KEY)
-  }, [adminSession])
 
   useEffect(() => {
     if (userSession) {
@@ -4398,12 +5541,45 @@ function App() {
   }, [userSession])
 
   useEffect(() => {
+    let isActive = true
+    let retryTimerId = null
+
+    const finishBootstrap = () => {
+      if (!isActive) {
+        return
+      }
+      setAuthBootstrapStatus('ready')
+    }
+
+    const clearSessionAndFinish = () => {
+      if (!isActive) {
+        return
+      }
+      setUserSession(null)
+      setAuthBootstrapStatus('ready')
+    }
+
+    const scheduleBootstrapRetry = () => {
+      if (!isActive) {
+        return
+      }
+      setAuthBootstrapStatus('pending')
+      retryTimerId = window.setTimeout(() => {
+        if (!isActive) {
+          return
+        }
+        setAuthBootstrapRetryNonce((prev) => prev + 1)
+      }, 3_000)
+    }
+
     const verifyOrRefreshSession = async () => {
       const currentSession = normalizeUserSession(userSession)
       if (!currentSession) {
-        setUserSession(null)
+        clearSessionAndFinish()
         return
       }
+
+      setAuthBootstrapStatus('pending')
 
       try {
         const now = Date.now()
@@ -4411,33 +5587,126 @@ function App() {
         const refreshExpiresAt = toTimeMillis(currentSession.refreshTokenExpiresAt)
 
         if (!refreshExpiresAt || refreshExpiresAt <= now) {
-          setUserSession(null)
+          clearSessionAndFinish()
           return
         }
 
         if (!accessExpiresAt || accessExpiresAt <= now) {
-          const refreshedSession = await handleRefreshSession(currentSession.refreshToken)
-          if (!refreshedSession) {
-            setUserSession(null)
+          try {
+            const refreshedSession = await handleRefreshSession(currentSession.refreshToken)
+            if (!isActive) {
+              return
+            }
+            if (!refreshedSession) {
+              clearSessionAndFinish()
+              return
+            }
+            finishBootstrap()
+            return
+          } catch (refreshError) {
+            if (!isActive) {
+              return
+            }
+            if (isAuthFailureError(refreshError)) {
+              clearSessionAndFinish()
+              return
+            }
+            if (isRecoverableBootstrapError(refreshError)) {
+              scheduleBootstrapRetry()
+              return
+            }
+            clearSessionAndFinish()
             return
           }
-          return
         }
 
-        await requestJson('/api/v1/auth/me', {
-          headers: {
-            Authorization: `Bearer ${currentSession.accessToken}`,
-          },
-        })
+        try {
+          const meResponse = await requestJson('/api/v1/auth/me', {
+            headers: {
+              Authorization: `Bearer ${currentSession.accessToken}`,
+            },
+          })
+          if (!isActive) {
+            return
+          }
+          const nextUser = meResponse?.user
+          if (nextUser && typeof nextUser.email === 'string') {
+            const nextRole = String(nextUser.role ?? '').trim().toUpperCase()
+            const currentRole = String(currentSession.user?.role ?? '').trim().toUpperCase()
+            const nextName = String(nextUser.name ?? '').trim()
+            const currentName = String(currentSession.user?.name ?? '').trim()
+            if (nextRole !== currentRole || (nextName.length > 0 && nextName !== currentName)) {
+              setUserSession({
+                ...currentSession,
+                user: {
+                  ...currentSession.user,
+                  ...nextUser,
+                },
+              })
+            }
+          }
+          finishBootstrap()
+        } catch (meError) {
+          if (!isActive) {
+            return
+          }
+          if (isAuthFailureError(meError)) {
+            try {
+              const refreshedSession = await handleRefreshSession(currentSession.refreshToken)
+              if (!isActive) {
+                return
+              }
+              if (!refreshedSession) {
+                clearSessionAndFinish()
+                return
+              }
+              finishBootstrap()
+              return
+            } catch (refreshError) {
+              if (!isActive) {
+                return
+              }
+              if (isAuthFailureError(refreshError)) {
+                clearSessionAndFinish()
+                return
+              }
+              if (isRecoverableBootstrapError(refreshError)) {
+                scheduleBootstrapRetry()
+                return
+              }
+              clearSessionAndFinish()
+              return
+            }
+          }
+
+          if (isRecoverableBootstrapError(meError)) {
+            scheduleBootstrapRetry()
+            return
+          }
+
+          clearSessionAndFinish()
+        }
       } catch {
-        setUserSession(null)
+        clearSessionAndFinish()
       }
     }
 
     verifyOrRefreshSession()
-  }, [userSession])
+    return () => {
+      isActive = false
+      if (retryTimerId) {
+        window.clearTimeout(retryTimerId)
+      }
+    }
+    // Session validation deliberately keys off the full stored session shape.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userSession, authBootstrapRetryNonce])
 
   useEffect(() => {
+    if (authBootstrapStatus !== 'ready') {
+      return undefined
+    }
+
     const currentSession = normalizeUserSession(userSession)
     if (!currentSession) {
       return undefined
@@ -4453,15 +5722,30 @@ function App() {
     const timerId = window.setTimeout(async () => {
       try {
         await handleRefreshSession(currentSession.refreshToken)
-      } catch {
+      } catch (refreshError) {
+        if (isAuthFailureError(refreshError)) {
+          setUserSession(null)
+          setAuthBootstrapStatus('ready')
+          return
+        }
+
+        if (isRecoverableBootstrapError(refreshError)) {
+          setAuthBootstrapStatus('pending')
+          setAuthBootstrapRetryNonce((prev) => prev + 1)
+          return
+        }
+
         setUserSession(null)
+        setAuthBootstrapStatus('ready')
       }
     }, refreshDelay)
 
     return () => {
       window.clearTimeout(timerId)
     }
-  }, [userSession?.accessTokenExpiresAt, userSession?.refreshToken])
+    // Refresh timer intentionally tracks token timestamps only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authBootstrapStatus, userSession?.accessTokenExpiresAt, userSession?.refreshToken])
 
   useEffect(() => {
     const allInvites = trips.flatMap((trip) => trip.invitedPeople ?? [])
@@ -4477,72 +5761,142 @@ function App() {
   useEffect(() => {
     const normalizedPlaces = normalizeRecommendedPlaces(recommendedPlaces)
     setPlaceReviews((prev) => {
-      const next = { ...prev }
-      let hasChanged = false
-
+      const next = {}
       normalizedPlaces.forEach((place) => {
-        if (!Array.isArray(next[place.id])) {
-          next[place.id] = []
-          hasChanged = true
-        }
+        next[place.id] = Array.isArray(prev[place.id]) ? prev[place.id] : []
       })
-
-      Object.keys(next).forEach((placeId) => {
-        if (!normalizedPlaces.some((place) => place.id === placeId)) {
-          delete next[placeId]
-          hasChanged = true
-        }
-      })
-
-      return hasChanged ? next : prev
+      return next
     })
   }, [recommendedPlaces])
 
+  useEffect(() => {
+    if (activeRoute !== 'place-view' || !viewingPlaceId) {
+      return
+    }
+    let isActive = true
+    fetchPlaceReviews(viewingPlaceId)
+      .then((reviews) => {
+        if (!isActive) {
+          return
+        }
+        setPlaceReviews((prev) => ({
+          ...prev,
+          [viewingPlaceId]: Array.isArray(reviews) ? reviews : [],
+        }))
+      })
+      .catch(() => {
+        // Keep existing cached reviews on detail fetch failure.
+      })
+    return () => {
+      isActive = false
+    }
+  }, [activeRoute, viewingPlaceId])
+
   const current = ROUTES[activeRoute] ?? ROUTES.home
-  const isAdminAuthenticated = adminSession?.role === 'ADMIN'
-  const isUserAuthenticated = !!normalizeUserSession(userSession)
+  const normalizedSession = useMemo(() => normalizeUserSession(userSession), [userSession])
+  const isAuthBootstrapReady = authBootstrapStatus === 'ready'
+  const isUserAuthenticated = !!normalizedSession
+  const isAdminAuthenticated = String(normalizedSession?.user?.role ?? '')
+    .trim()
+    .toUpperCase() === 'ADMIN'
+  const adminSession = useMemo(
+    () =>
+      isAdminAuthenticated
+        ? {
+            name: String(normalizedSession?.user?.name ?? '').trim() || '관리자',
+            email: String(normalizedSession?.user?.email ?? '').trim(),
+          }
+        : null,
+    [isAdminAuthenticated, normalizedSession],
+  )
   const isBackofficeRoute = ADMIN_ROUTE_KEYS.has(activeRoute)
+  const shouldHoldProtectedRouteRender =
+    !isAuthBootstrapReady && (USER_PROTECTED_ROUTE_KEYS.has(activeRoute) || isBackofficeRoute)
 
   useEffect(() => {
+    if (!isAuthBootstrapReady) {
+      return
+    }
     if (!USER_PROTECTED_ROUTE_KEYS.has(activeRoute)) {
       return
     }
     if (!isUserAuthenticated) {
-      window.location.hash = '#login'
+      setRouteHash('login')
     }
-  }, [activeRoute, isUserAuthenticated])
+  }, [activeRoute, isAuthBootstrapReady, isUserAuthenticated])
 
   useEffect(() => {
     if (activeRoute !== 'trip-view') {
       return
     }
     if (viewingTripId) {
-      window.location.hash = `#trip-detail/${encodeURIComponent(String(viewingTripId).trim())}`
+      setTripDetailHash(viewingTripId)
       return
     }
-    window.location.hash = '#trips'
+    setRouteHash('trips')
   }, [activeRoute, viewingTripId])
+
+  useEffect(() => {
+    if (activeRoute !== 'place-view') {
+      return
+    }
+    if (!viewingPlaceId) {
+      setRouteHash('places')
+    }
+  }, [activeRoute, viewingPlaceId])
+
+  useEffect(() => {
+    if (!isNotificationPopoverOpen) {
+      return
+    }
+
+    const handleOutsidePointer = (event) => {
+      const popoverRoot = notificationPopoverRef.current
+      if (!popoverRoot || popoverRoot.contains(event.target)) {
+        return
+      }
+      setIsNotificationPopoverOpen(false)
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsNotificationPopoverOpen(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handleOutsidePointer)
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      window.removeEventListener('mousedown', handleOutsidePointer)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [isNotificationPopoverOpen])
+
+  useEffect(() => {
+    if (!isUserAuthenticated) {
+      setIsNotificationPopoverOpen(false)
+    }
+  }, [isUserAuthenticated])
 
   const openTripViewPage = (tripId) => {
     setViewingTripId(tripId)
-    window.location.hash = `#trip-detail/${encodeURIComponent(String(tripId ?? '').trim())}`
+    setTripDetailHash(tripId)
   }
   const backToTripsPage = () => {
-    window.location.hash = '#trips'
+    setRouteHash('trips')
   }
   const openTripCreatePage = () => {
-    window.location.hash = '#trip-create'
+    setRouteHash('trip-create')
   }
   const openPlaceViewPage = (placeId) => {
-    setViewingPlaceId(placeId)
-    window.location.hash = '#place-view'
+    setPlaceViewHash(placeId)
   }
   const backToPlacesPage = () => {
-    window.location.hash = '#places'
+    setRouteHash('places')
   }
   const openTripEditPage = (tripId) => {
     setEditingTripId(tripId)
-    window.location.hash = '#trip-edit'
+    setRouteHash('trip-edit')
   }
   const createDefaultGroup = async (session) => {
     const groupName = `${String(session?.user?.name ?? 'Soonmile 사용자').trim() || 'Soonmile 사용자'} 기본 그룹`
@@ -4569,6 +5923,210 @@ function App() {
 
     setStoredGroupId(session.user.email, groupId)
     return groupId
+  }
+
+  const fetchGroupMembers = async (groupId, session) => {
+    const response = await requestJson(`/api/v1/groups/${groupId}/members`, {
+      headers: buildAuthHeaders(session),
+    })
+    return normalizeTripMembers(Array.isArray(response?.items) ? response.items : [])
+  }
+
+  const fetchGroupInvites = async (groupId, session) => {
+    const response = await requestJson(`/api/v1/groups/${groupId}/invites`, {
+      headers: buildAuthHeaders(session),
+    })
+    return normalizeGroupInvites(Array.isArray(response?.items) ? response.items : [])
+  }
+
+  const fetchInvitePreview = async (inviteCode) => {
+    const response = await requestJson(`/api/v1/invites/${encodeURIComponent(String(inviteCode ?? '').trim())}`)
+    return response && typeof response === 'object' ? response : null
+  }
+
+  const fetchTripSharePreview = async (shareToken) => {
+    const response = await requestJson(`/api/v1/trip-shares/${encodeURIComponent(String(shareToken ?? '').trim())}`)
+    return response && typeof response === 'object' ? response : null
+  }
+
+  const fetchPlaceReviews = async (placeId) => {
+    const response = await requestJson(`/api/v1/places/${encodeURIComponent(String(placeId ?? '').trim())}/reviews`)
+    return normalizePlaceReviewList(Array.isArray(response?.items) ? response.items : [], placeId)
+  }
+
+  const reportPlaceReview = async (placeId, reviewId, reason, session) => {
+    return requestJson(`/api/v1/places/${encodeURIComponent(String(placeId ?? '').trim())}/reviews/${encodeURIComponent(String(reviewId ?? '').trim())}/reports`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session ? buildAuthHeaders(session) : {}),
+      },
+      body: JSON.stringify({
+        reporterName: session?.user?.name ?? '',
+        reason: String(reason ?? '').trim(),
+      }),
+    })
+  }
+
+  const createPlaceReview = async (placeId, review, session) => {
+    const response = await requestJson(`/api/v1/places/${encodeURIComponent(String(placeId ?? '').trim())}/reviews`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session ? buildAuthHeaders(session) : {}),
+      },
+      body: JSON.stringify({
+        author: String(review?.author ?? '').trim(),
+        rating: normalizeReviewRating(review?.rating),
+        comment: String(review?.comment ?? '').trim(),
+      }),
+    })
+    return normalizePlaceReviewList([response], placeId)[0] ?? null
+  }
+
+  const fetchNotificationsFromServer = async (session, options = {}) => {
+    const params = new URLSearchParams()
+    const page = Number.isFinite(Number(options?.page)) ? Math.max(0, Number(options.page)) : 0
+    const size = Number.isFinite(Number(options?.size)) ? Math.max(1, Number(options.size)) : 20
+    const sort = String(options?.sort ?? 'desc').trim().toLowerCase() === 'asc' ? 'asc' : 'desc'
+    const type = String(options?.type ?? '').trim()
+    const isRead = options?.isRead
+    params.set('page', String(page))
+    params.set('size', String(size))
+    params.set('sort', sort)
+    if (type.length > 0) {
+      params.set('type', type)
+    }
+    if (typeof isRead === 'boolean') {
+      params.set('isRead', String(isRead))
+    }
+
+    const response = await requestJson(`/api/v1/notifications?${params.toString()}`, {
+      headers: buildAuthHeaders(session),
+    })
+    return {
+      items: Array.isArray(response?.items) ? response.items : [],
+      page: Number(response?.page) || 0,
+      size: Number(response?.size) || size,
+      totalCount: Number(response?.totalCount) || 0,
+      hasNext: response?.hasNext === true,
+      unreadCount: Number(response?.unreadCount) || 0,
+    }
+  }
+
+  const markNotificationAsRead = async (notificationId, session) => {
+    return requestJson(`/api/v1/notifications/${encodeURIComponent(String(notificationId ?? '').trim())}/read`, {
+      method: 'PATCH',
+      headers: buildAuthHeaders(session),
+    })
+  }
+
+  const markAllNotificationsAsRead = async (session) => {
+    return requestJson('/api/v1/notifications/read-all', {
+      method: 'POST',
+      headers: buildAuthHeaders(session),
+    })
+  }
+
+  const fetchTripShares = async (tripId, session) => {
+    const response = await requestJson(`/api/v1/trips/${encodeURIComponent(String(tripId ?? '').trim())}/shares`, {
+      headers: buildAuthHeaders(session),
+    })
+    return Array.isArray(response?.items) ? response.items : []
+  }
+
+  const revokeTripShareLink = async (tripId, shareId, session) => {
+    return requestJson(`/api/v1/trips/${encodeURIComponent(String(tripId ?? '').trim())}/shares/${encodeURIComponent(String(shareId ?? '').trim())}`, {
+      method: 'DELETE',
+      headers: buildAuthHeaders(session),
+    })
+  }
+
+  const fetchModerationReviews = async (session) => {
+    const response = await requestJson('/api/v1/admin/places/reviews', {
+      headers: buildAuthHeaders(session),
+    })
+    return Array.isArray(response?.items) ? response.items : []
+  }
+
+  const updateModerationReviewHidden = async (reviewId, isHidden, reason, session) => {
+    return requestJson(`/api/v1/admin/places/reviews/${encodeURIComponent(String(reviewId ?? '').trim())}/hidden`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...buildAuthHeaders(session),
+      },
+      body: JSON.stringify({
+        isHidden: isHidden === true,
+        reason: String(reason ?? '').trim(),
+      }),
+    })
+  }
+
+  const createGroupInvite = async (groupId, invitedEmail, session) => {
+    return requestJson(`/api/v1/groups/${groupId}/invites`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...buildAuthHeaders(session),
+      },
+      body: JSON.stringify({
+        invitedEmail,
+        expiresInHours: 72,
+      }),
+    })
+  }
+
+  const createTripShareLink = async (tripId, session) => {
+    const response = await requestJson(`/api/v1/trips/${encodeURIComponent(String(tripId ?? '').trim())}/shares`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...buildAuthHeaders(session),
+      },
+      body: JSON.stringify({
+        expiresInHours: 168,
+      }),
+    })
+    const shareToken = String(response?.shareToken ?? '').trim()
+    const shareUrl = String(response?.shareUrl ?? '').trim()
+    return {
+      ...response,
+      shareToken,
+      shareUrl: resolveTripShareUrl(shareToken, shareUrl),
+    }
+  }
+
+  const applyGroupStateToTrips = (groupId, groupMembers, groupInvites) => {
+    const normalizedGroupId = String(groupId ?? '').trim()
+    if (!normalizedGroupId) {
+      return
+    }
+
+    setTrips((prev) =>
+      prev.map((trip) => {
+        if (String(trip.groupId ?? '').trim() !== normalizedGroupId) {
+          return trip
+        }
+        const participation = buildGroupParticipation(
+          groupMembers,
+          groupInvites,
+          normalizeUserSession(userSession)?.user?.email,
+          trip.myGroupRole,
+          trip.members,
+        )
+        return {
+          ...trip,
+          participants: participation.participants,
+          invitedPeople: participation.invitedPeople,
+          groupInvites: participation.groupInvites,
+          members: participation.members,
+          type: participation.type,
+          myGroupRole: participation.myGroupRole,
+          updatedAt: new Date().toISOString(),
+        }
+      }),
+    )
   }
 
   const fetchTripPinsWithPhotos = async (tripId, session, options = {}) => {
@@ -4630,14 +6188,6 @@ function App() {
     )
   }
 
-  const fetchTripMembers = async (tripId, session) => {
-    const membersResponse = await requestJson(`/api/v1/trips/${tripId}/members`, {
-      headers: buildAuthHeaders(session),
-    })
-    const memberItems = Array.isArray(membersResponse?.items) ? membersResponse.items : []
-    return normalizeTripMembers(memberItems)
-  }
-
   const fetchTripUnresolvedPhotos = async (tripId, session, options = {}) => {
     const fallbackPhotoUrls = Array.isArray(options?.fallbackPhotoUrls)
       ? options.fallbackPhotoUrls.filter((item) => typeof item === 'string' && item.length > 0)
@@ -4687,7 +6237,6 @@ function App() {
         headers: buildAuthHeaders(session),
       })
       const summaries = Array.isArray(listResponse?.items) ? listResponse.items : []
-      const fallbackCover = 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=900&q=80'
 
       const mappedTrips = await Promise.all(
         summaries.map(async (summary, index) => {
@@ -4705,18 +6254,27 @@ function App() {
             String(summary?.updatedAt ?? '').trim() ||
             String(summary?.createdAt ?? '').trim() ||
             new Date().toISOString()
-          let tripMembers = []
+          let groupMembers = []
           try {
-            tripMembers = await fetchTripMembers(tripId, session)
+            groupMembers = await fetchGroupMembers(groupId, session)
           } catch {
-            tripMembers = []
+            groupMembers = []
           }
-          const participation = buildTripParticipationFromMembers(
-            tripMembers,
+          const myGroupRole = resolveMyGroupRole(groupMembers, session?.user?.email, summary?.myRole)
+          let groupInvites = []
+          if (myGroupRole === 'OWNER') {
+            try {
+              groupInvites = await fetchGroupInvites(groupId, session)
+            } catch {
+              groupInvites = []
+            }
+          }
+          const participation = buildGroupParticipation(
+            groupMembers,
+            groupInvites,
             session?.user?.email,
-            [],
+            myGroupRole,
             summaryMemberCount,
-            buildLocalTripParticipants([], session?.user),
           )
           const members = participation.members
           const tripType = participation.type
@@ -4751,11 +6309,13 @@ function App() {
             type: tripType,
             pinColor,
             updatedAt,
-            cover: representativeCover || fallbackCover,
+            cover: representativeCover || '',
             notes: '',
             photoPreviews: unresolvedPhotoUrls,
             invitedPeople: participation.invitedPeople,
             participants: participation.participants,
+            groupInvites: participation.groupInvites,
+            myGroupRole: participation.myGroupRole,
             pins: mappedPins,
             adminStatus: 'ACTIVE',
           }
@@ -4778,33 +6338,61 @@ function App() {
     }
   }
 
-  const loadAdminUsersFromServer = async () => {
+  const loadAdminUsersFromServer = async (sessionCandidate) => {
+    const session = normalizeUserSession(sessionCandidate)
+    if (!session) {
+      setAdminUsers([])
+      setAdminUsersLoading(false)
+      setAdminUsersLoadError('')
+      return
+    }
+
     setAdminUsersLoading(true)
     setAdminUsersLoadError('')
 
     try {
-      const response = await requestJson('/api/v1/admin/users')
+      const response = await requestJson('/api/v1/admin/users', {
+        headers: buildAuthHeaders(session),
+      })
       const users = Array.isArray(response?.items) ? response.items : []
-      setAdminUsers(normalizeAdminUsers(users, ADMIN_USERS_SEED))
+      setAdminUsers(normalizeAdminUsers(users))
     } catch (loadError) {
-      setAdminUsers((prev) => normalizeAdminUsers(prev, ADMIN_USERS_SEED))
+      setAdminUsers([])
       setAdminUsersLoadError(loadError instanceof Error ? loadError.message : '서버에서 사용자 목록을 불러오지 못했습니다.')
     } finally {
       setAdminUsersLoading(false)
     }
   }
 
-  const loadRecommendedPlacesFromServer = async () => {
+  const loadRecommendedPlacesFromServer = async (sessionCandidate, preferAdminList = false) => {
+    const session = normalizeUserSession(sessionCandidate)
+    const shouldUseAdminEndpoint = preferAdminList && !!session
+    const endpoint = shouldUseAdminEndpoint ? '/api/v1/admin/places' : '/api/v1/places'
+
     setPlacesLoading(true)
     setPlacesLoadError('')
 
     try {
-      const response = await requestJson('/api/v1/admin/places')
+      const response = await requestJson(endpoint, {
+        headers: shouldUseAdminEndpoint ? buildAuthHeaders(session) : {},
+      })
       const places = Array.isArray(response?.items) ? response.items : []
       const normalized = normalizeRecommendedPlaces(places)
-      setRecommendedPlaces(normalized.length > 0 ? normalized : normalizeRecommendedPlaces(RECOMMENDED_PLACES))
+      setRecommendedPlaces(normalized)
     } catch (loadError) {
-      setRecommendedPlaces((prev) => (prev.length > 0 ? normalizeRecommendedPlaces(prev) : normalizeRecommendedPlaces(RECOMMENDED_PLACES)))
+      if (shouldUseAdminEndpoint) {
+        try {
+          const fallbackResponse = await requestJson('/api/v1/places')
+          const fallbackPlaces = Array.isArray(fallbackResponse?.items) ? fallbackResponse.items : []
+          const fallbackNormalized = normalizeRecommendedPlaces(fallbackPlaces)
+          setRecommendedPlaces(fallbackNormalized)
+          setPlacesLoadError('')
+          return
+        } catch {
+          // Fall through to common error handling.
+        }
+      }
+      setRecommendedPlaces([])
       setPlacesLoadError(loadError instanceof Error ? loadError.message : '서버에서 추천장소 목록을 불러오지 못했습니다.')
     } finally {
       setPlacesLoading(false)
@@ -4812,14 +6400,66 @@ function App() {
   }
 
   useEffect(() => {
-    loadRecommendedPlacesFromServer()
-  }, [])
+    loadRecommendedPlacesFromServer(normalizedSession, isAdminAuthenticated && isAuthBootstrapReady)
+  }, [normalizedSession, isAdminAuthenticated, isAuthBootstrapReady])
 
   useEffect(() => {
-    loadAdminUsersFromServer()
-  }, [userSession?.accessToken, userSession?.user?.email, adminSession?.email])
+    if (!isAuthBootstrapReady) {
+      return
+    }
+    if (!isAdminAuthenticated) {
+      setAdminUsers([])
+      setAdminUsersLoading(false)
+      setAdminUsersLoadError('')
+      setModerationReviews([])
+      setModerationReviewsLoading(false)
+      setModerationReviewsError('')
+      return
+    }
+    loadAdminUsersFromServer(normalizedSession)
+  }, [normalizedSession, isAdminAuthenticated, isAuthBootstrapReady])
 
   useEffect(() => {
+    if (!isAuthBootstrapReady) {
+      return
+    }
+    if (!isAdminAuthenticated) {
+      return
+    }
+    if (activeRoute !== 'admin-place-reviews') {
+      return
+    }
+    let isActive = true
+    setModerationReviewsLoading(true)
+    setModerationReviewsError('')
+    fetchModerationReviews(normalizedSession)
+      .then((items) => {
+        if (!isActive) {
+          return
+        }
+        setModerationReviews(Array.isArray(items) ? items : [])
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return
+        }
+        setModerationReviews([])
+        setModerationReviewsError(error instanceof Error ? error.message : '리뷰 모더레이션 목록을 불러오지 못했습니다.')
+      })
+      .finally(() => {
+        if (isActive) {
+          setModerationReviewsLoading(false)
+        }
+      })
+    return () => {
+      isActive = false
+    }
+  }, [activeRoute, isAdminAuthenticated, isAuthBootstrapReady, normalizedSession])
+
+  useEffect(() => {
+    if (!isAuthBootstrapReady) {
+      return
+    }
     const session = normalizeUserSession(userSession)
     if (!session) {
       setTrips([])
@@ -4829,7 +6469,232 @@ function App() {
     }
 
     loadTripsFromServer(session)
-  }, [userSession?.accessToken, userSession?.user?.email])
+    // Trips are intentionally reloaded only when auth identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authBootstrapStatus, userSession?.accessToken, userSession?.user?.email])
+
+  useEffect(() => {
+    if (activeRoute !== 'invite') {
+      setInvitePreview(null)
+      setInvitePreviewLoading(false)
+      setInvitePreviewError('')
+      return
+    }
+
+    if (!viewingInviteCode) {
+      setInvitePreview(null)
+      setInvitePreviewLoading(false)
+      setInvitePreviewError('초대 코드가 올바르지 않습니다.')
+      return
+    }
+
+    let isActive = true
+    setInvitePreviewLoading(true)
+    setInvitePreviewError('')
+
+    fetchInvitePreview(viewingInviteCode)
+      .then((preview) => {
+        if (!isActive) {
+          return
+        }
+        setInvitePreview(preview)
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return
+        }
+        setInvitePreview(null)
+        setInvitePreviewError(error instanceof Error ? error.message : '초대 정보를 불러오지 못했습니다.')
+      })
+      .finally(() => {
+        if (isActive) {
+          setInvitePreviewLoading(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [activeRoute, viewingInviteCode])
+
+  useEffect(() => {
+    if (activeRoute !== 'trip-share') {
+      setTripSharePreview(null)
+      setTripSharePreviewLoading(false)
+      setTripSharePreviewError('')
+      return
+    }
+
+    if (!viewingTripShareToken) {
+      setTripSharePreview(null)
+      setTripSharePreviewLoading(false)
+      setTripSharePreviewError('공유 토큰이 올바르지 않습니다.')
+      return
+    }
+
+    let isActive = true
+    setTripSharePreviewLoading(true)
+    setTripSharePreviewError('')
+
+    fetchTripSharePreview(viewingTripShareToken)
+      .then((preview) => {
+        if (!isActive) {
+          return
+        }
+        setTripSharePreview(preview)
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return
+        }
+        setTripSharePreview(null)
+        setTripSharePreviewError(error instanceof Error ? error.message : '공유 여행 정보를 불러오지 못했습니다.')
+      })
+      .finally(() => {
+        if (isActive) {
+          setTripSharePreviewLoading(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [activeRoute, viewingTripShareToken])
+
+  useEffect(() => {
+    if (!isAuthBootstrapReady) {
+      return
+    }
+    if (!normalizedSession) {
+      setNotifications([])
+      setNotificationsLoading(false)
+      setNotificationsLoadError('')
+      setNotificationsHasNext(false)
+      setNotificationsPage(0)
+      setNotificationsUnreadCount(0)
+      return
+    }
+
+    const query = {
+      type: notificationsFilter === 'PLACE_REVIEW_CREATED' || notificationsFilter === 'PLACE_REVIEW_REPORTED' || notificationsFilter === 'TRIP_SHARE_CREATED'
+        ? notificationsFilter
+        : '',
+      isRead: notificationsFilter === 'UNREAD' ? false : undefined,
+      page: 0,
+      size: 20,
+      sort: 'desc',
+    }
+
+    let isActive = true
+    setNotificationsLoading(true)
+    setNotificationsLoadError('')
+    fetchNotificationsFromServer(normalizedSession, query)
+      .then((result) => {
+        if (!isActive) {
+          return
+        }
+        setNotifications(result.items)
+        setNotificationsHasNext(result.hasNext)
+        setNotificationsPage(result.page)
+        setNotificationsUnreadCount(result.unreadCount)
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return
+        }
+        setNotifications([])
+        setNotificationsHasNext(false)
+        setNotificationsPage(0)
+        setNotificationsUnreadCount(0)
+        setNotificationsLoadError(error instanceof Error ? error.message : '알림을 불러오지 못했습니다.')
+      })
+      .finally(() => {
+        if (isActive) {
+          setNotificationsLoading(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [normalizedSession, notificationsFilter, trips.length, recommendedPlaces.length, isAuthBootstrapReady])
+
+  useEffect(() => {
+    if (!isAuthBootstrapReady) {
+      return
+    }
+    if (!normalizedSession) {
+      return
+    }
+    const controller = new AbortController()
+    let isActive = true
+
+    const connectStream = async () => {
+      try {
+        const response = await fetch(buildApiUrl('/api/v1/notifications/stream'), {
+          method: 'GET',
+          headers: buildAuthHeaders(normalizedSession),
+          signal: controller.signal,
+        })
+        if (!response.ok || !response.body) {
+          return
+        }
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ''
+
+        while (isActive) {
+          const { done, value } = await reader.read()
+          if (done) {
+            break
+          }
+          buffer += decoder.decode(value, { stream: true })
+          const blocks = buffer.split('\n\n')
+          buffer = blocks.pop() ?? ''
+          blocks.forEach((block) => {
+            const dataLine = block
+              .split('\n')
+              .map((line) => line.trim())
+              .find((line) => line.startsWith('data:'))
+            if (!dataLine) {
+              return
+            }
+            const payloadRaw = dataLine.slice('data:'.length).trim()
+            if (!payloadRaw || payloadRaw === 'ok') {
+              return
+            }
+            try {
+              const payload = JSON.parse(payloadRaw)
+              if (!payload || typeof payload !== 'object') {
+                return
+              }
+              const notificationId = String(payload.notificationId ?? '').trim()
+              if (!notificationId) {
+                return
+              }
+              setNotifications((prev) => {
+                if (prev.some((item) => String(item?.notificationId ?? '').trim() === notificationId)) {
+                  return prev
+                }
+                return [payload, ...prev]
+              })
+              setNotificationsUnreadCount((prev) => prev + (payload.isRead ? 0 : 1))
+            } catch {
+              // Ignore malformed SSE payload chunk.
+            }
+          })
+        }
+      } catch {
+        // Realtime stream fallback: keep pull-based notifications only.
+      }
+    }
+
+    connectStream()
+    return () => {
+      isActive = false
+      controller.abort()
+    }
+  }, [normalizedSession, isAuthBootstrapReady])
 
   const handleCreateTrip = async (createdTrip) => {
     const session = normalizeUserSession(userSession)
@@ -4931,41 +6796,41 @@ function App() {
     }
 
     if (normalizedInvites.length > 0) {
-      await Promise.allSettled(
-        normalizedInvites.map((person) =>
-          requestJson(`/api/v1/trips/${createdTripId}/members/by-email`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...buildAuthHeaders(session),
-            },
-            body: JSON.stringify({
-              email: person.email,
-            }),
-          }),
-        ),
-      )
+      await Promise.allSettled(normalizedInvites.map((person) => createGroupInvite(targetGroupId, person.email, session)))
     }
 
-    const localParticipants = buildLocalTripParticipants(normalizedInvites, session?.user)
-    let participation = {
-      ...resolveTripParticipation({
-        memberCount: Math.max(Number(createdTrip.members) || 1, normalizedInvites.length + 1),
-        invitedPeople: normalizedInvites,
-      }),
-      participants: localParticipants,
-    }
+    let groupMembers = []
     try {
-      const tripMembers = await fetchTripMembers(createdTripId, session)
-      participation = buildTripParticipationFromMembers(
-        tripMembers,
+      groupMembers = await fetchGroupMembers(targetGroupId, session)
+    } catch {
+      groupMembers = buildLocalTripParticipants([], session?.user)
+    }
+    let groupInvites = []
+    try {
+      groupInvites = await fetchGroupInvites(targetGroupId, session)
+    } catch {
+      groupInvites = normalizedInvites
+    }
+
+    let participation = buildGroupParticipation(
+      groupMembers,
+      groupInvites,
+      session?.user?.email,
+      'OWNER',
+      Math.max(Number(createdTrip.members) || 1, normalizedInvites.length + 1),
+    )
+    try {
+      groupMembers = await fetchGroupMembers(targetGroupId, session)
+      groupInvites = await fetchGroupInvites(targetGroupId, session)
+      participation = buildGroupParticipation(
+        groupMembers,
+        groupInvites,
         session?.user?.email,
-        participation.invitedPeople,
+        'OWNER',
         participation.members,
-        localParticipants,
       )
     } catch {
-      // Ignore member sync failure and keep local participation fallback.
+      // Ignore sync failure and keep local group participation fallback.
     }
 
     const mappedPins = await fetchTripPinsWithPhotos(createdTripId, session, {
@@ -4994,6 +6859,8 @@ function App() {
       pinColor: createdPinColor,
       photoPreviews: unresolvedPhotoUrls,
       pins: mappedPins,
+      groupInvites: participation.groupInvites,
+      myGroupRole: participation.myGroupRole,
       adminStatus: createdTrip.adminStatus ?? 'ACTIVE',
       updatedAt: new Date().toISOString(),
     }
@@ -5001,10 +6868,11 @@ function App() {
     setTrips((prev) => [normalizedTrip, ...prev])
     setAdminUsers((prev) => ensureUsersFromInvites(prev, participation.invitedPeople))
     setViewingTripId(normalizedTrip.id)
-    window.location.hash = `#trip-detail/${encodeURIComponent(String(normalizedTrip.id ?? '').trim())}`
+      setTripDetailHash(normalizedTrip.id)
   }
   const handleUpdateTrip = async (updatedTrip) => {
     const normalizedInvites = normalizeInvitedPeople(updatedTrip.invitedPeople)
+    const normalizedExistingGroupInvites = normalizeGroupInvites(updatedTrip.groupInvites)
     const uploadedPhotoPreviews = Array.isArray(updatedTrip.uploadedPhotoPreviews)
       ? updatedTrip.uploadedPhotoPreviews.filter((item) => typeof item === 'string')
       : []
@@ -5014,11 +6882,14 @@ function App() {
     const fallbackParticipants = normalizeTripMembers(updatedTrip.participants)
     const localParticipants = fallbackParticipants.length > 0 ? fallbackParticipants : buildLocalTripParticipants(normalizedInvites, session?.user)
     const localParticipation = {
-      ...resolveTripParticipation({
-        memberCount: updatedTrip.members,
-        invitedPeople: normalizedInvites,
-      }),
-      participants: localParticipants,
+      ...buildGroupParticipation(
+        localParticipants,
+        normalizedExistingGroupInvites.length > 0 ? normalizedExistingGroupInvites : normalizedInvites,
+        session?.user?.email,
+        updatedTrip.myGroupRole,
+        updatedTrip.members,
+      ),
+      participants: localParticipants.length > 0 ? localParticipants : [],
     }
     const normalizedTrip = {
       ...updatedTrip,
@@ -5123,18 +6994,21 @@ function App() {
 
     if (isServerTripId && session) {
       try {
-        const tripMembers = await fetchTripMembers(nextTrip.id, session)
-        const participation = buildTripParticipationFromMembers(
-          tripMembers,
+        const groupMembers = await fetchGroupMembers(nextTrip.groupId, session)
+        const groupInvites = nextTrip.myGroupRole === 'OWNER' ? await fetchGroupInvites(nextTrip.groupId, session) : []
+        const participation = buildGroupParticipation(
+          groupMembers,
+          groupInvites,
           session?.user?.email,
-          nextTrip.invitedPeople,
+          nextTrip.myGroupRole,
           nextTrip.members,
-          nextTrip.participants,
         )
         nextTrip.invitedPeople = participation.invitedPeople
         nextTrip.members = participation.members
         nextTrip.type = participation.type
         nextTrip.participants = participation.participants
+        nextTrip.groupInvites = participation.groupInvites
+        nextTrip.myGroupRole = participation.myGroupRole
       } catch {
         // Ignore member sync failure and keep local participation fallback.
       }
@@ -5144,7 +7018,7 @@ function App() {
     setAdminUsers((prev) => ensureUsersFromInvites(prev, nextTrip.invitedPeople))
     setViewingTripId(nextTrip.id)
     setEditingTripId(null)
-    window.location.hash = `#trip-detail/${encodeURIComponent(String(nextTrip.id ?? '').trim())}`
+      setTripDetailHash(nextTrip.id)
   }
   const handleAddTripInvite = async (tripId, inviteEmail) => {
     const normalizedEmail = String(inviteEmail ?? '').trim().toLowerCase()
@@ -5158,9 +7032,11 @@ function App() {
     }
 
     const existingInvites = normalizeInvitedPeople(targetTrip.invitedPeople)
+    const existingGroupInvites = normalizeGroupInvites(targetTrip.groupInvites)
     const existingParticipants = normalizeTripMembers(targetTrip.participants)
     const existingEmails = new Set([
       ...existingInvites.map((person) => person.email),
+      ...existingGroupInvites.filter((invite) => invite.status === 'PENDING').map((invite) => invite.email),
       ...existingParticipants.map((person) => person.email),
     ])
     if (existingEmails.has(normalizedEmail)) {
@@ -5168,85 +7044,62 @@ function App() {
     }
 
     const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+
     let invitedPerson = buildInvitePerson(normalizedEmail)
-    let nextMemberCount = null
+    let syncedGroupInvites = existingGroupInvites
+    let syncedMembers = existingParticipants
     let alreadyMember = false
-    let syncedParticipation = null
     const isServerTripId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(tripId ?? ''))
     if (isServerTripId) {
-      const addMemberResponse = await requestJson(`/api/v1/trips/${tripId}/members/by-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...buildAuthHeaders(session),
-        },
-        body: JSON.stringify({
-          email: normalizedEmail,
-        }),
-      })
-
-      const memberEmail = String(addMemberResponse?.memberEmail ?? normalizedEmail).trim().toLowerCase()
-      const memberName = String(addMemberResponse?.memberName ?? invitedPerson.name).trim()
-      const memberUserId = String(addMemberResponse?.memberUserId ?? '').trim()
-      const parsedMemberCount = Number(addMemberResponse?.memberCount)
-      alreadyMember = !!addMemberResponse?.alreadyMember
-
+      const response = await createGroupInvite(targetTrip.groupId, normalizedEmail, session)
+      const inviteId = String(response?.inviteId ?? '').trim()
+      const inviteCode = String(response?.inviteCode ?? '').trim()
       invitedPerson = {
-        id: memberUserId || invitedPerson.id,
-        name: memberName || invitedPerson.name,
-        email: memberEmail || normalizedEmail,
+        id: inviteId || invitedPerson.id,
+        name: invitedPerson.name,
+        email: normalizedEmail,
       }
-      nextMemberCount = Number.isFinite(parsedMemberCount) && parsedMemberCount > 0 ? Math.floor(parsedMemberCount) : null
 
       try {
-        const tripMembers = await fetchTripMembers(tripId, session)
-        syncedParticipation = buildTripParticipationFromMembers(
-          tripMembers,
-          session?.user?.email,
-          existingInvites,
-          nextMemberCount ?? targetTrip.members,
-          existingParticipants.length > 0 ? existingParticipants : buildLocalTripParticipants(existingInvites, session?.user),
-        )
+        syncedMembers = await fetchGroupMembers(targetTrip.groupId, session)
       } catch {
-        syncedParticipation = null
+        syncedMembers = existingParticipants
+      }
+
+      try {
+        syncedGroupInvites = await fetchGroupInvites(targetTrip.groupId, session)
+      } catch {
+        syncedGroupInvites = normalizeGroupInvites([
+          ...existingGroupInvites,
+          {
+            inviteId: inviteId || invitedPerson.id,
+            inviteCode,
+            invitedEmail: normalizedEmail,
+            invitedName: invitedPerson.name,
+            inviteUrl: String(response?.inviteUrl ?? '').trim(),
+            expiresAt: String(response?.expiresAt ?? '').trim(),
+            status: 'PENDING',
+          },
+        ])
       }
     }
 
+    const participation = buildGroupParticipation(
+      syncedMembers,
+      syncedGroupInvites,
+      session?.user?.email,
+      targetTrip.myGroupRole,
+      targetTrip.members,
+    )
+
     setTrips((prev) =>
       prev.map((trip) => {
-        if (trip.id !== tripId) {
+        if (trip.groupId !== targetTrip.groupId) {
           return trip
         }
-
-        const previousInvites = normalizeInvitedPeople(trip.invitedPeople)
-        const mergedInvites = syncedParticipation?.invitedPeople
-          ? syncedParticipation.invitedPeople
-          : previousInvites.some((person) => person.email === invitedPerson.email)
-            ? previousInvites
-            : [...previousInvites, invitedPerson]
-        const previousParticipants = normalizeTripMembers(trip.participants)
-        const baseParticipants =
-          previousParticipants.length > 0 ? previousParticipants : buildLocalTripParticipants(previousInvites, session?.user)
-        const mergedParticipants = syncedParticipation?.participants
-          ? syncedParticipation.participants
-          : normalizeTripMembers([
-              ...baseParticipants,
-              {
-                userId: invitedPerson.id,
-                name: invitedPerson.name,
-                email: invitedPerson.email,
-                role: 'MEMBER',
-              },
-            ])
-        const fallbackMemberCount = Math.max(Number(trip.members) || 1, mergedParticipants.length || mergedInvites.length + 1)
-        const nextMembers = syncedParticipation?.members ?? nextMemberCount ?? fallbackMemberCount
-        const participation = buildTripParticipationFromMembers(
-          [],
-          session?.user?.email,
-          mergedInvites,
-          nextMembers,
-          mergedParticipants,
-        )
 
         return {
           ...trip,
@@ -5254,14 +7107,104 @@ function App() {
           members: participation.members,
           type: participation.type,
           participants: participation.participants,
+          groupInvites: participation.groupInvites,
+          myGroupRole: participation.myGroupRole,
           updatedAt: new Date().toISOString(),
         }
       }),
     )
-    setAdminUsers((prev) =>
-      ensureUsersFromInvites(prev, syncedParticipation?.invitedPeople?.length > 0 ? syncedParticipation.invitedPeople : [invitedPerson]),
-    )
+    setAdminUsers((prev) => ensureUsersFromInvites(prev, participation.invitedPeople.length > 0 ? participation.invitedPeople : [invitedPerson]))
     return { alreadyMember, member: invitedPerson }
+  }
+  const handleUpdateGroupMemberRole = async (groupId, memberUserId, role) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+
+    await requestJson(`/api/v1/groups/${groupId}/members/${encodeURIComponent(String(memberUserId ?? '').trim())}/role`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...buildAuthHeaders(session),
+      },
+      body: JSON.stringify({
+        role,
+      }),
+    })
+
+    const groupMembers = await fetchGroupMembers(groupId, session)
+    const groupInvites = await fetchGroupInvites(groupId, session)
+    applyGroupStateToTrips(groupId, groupMembers, groupInvites)
+  }
+
+  const handleRemoveGroupMember = async (groupId, memberUserId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+
+    await requestJson(`/api/v1/groups/${groupId}/members/${encodeURIComponent(String(memberUserId ?? '').trim())}`, {
+      method: 'DELETE',
+      headers: buildAuthHeaders(session),
+    })
+
+    const groupMembers = await fetchGroupMembers(groupId, session)
+    const groupInvites = await fetchGroupInvites(groupId, session)
+    applyGroupStateToTrips(groupId, groupMembers, groupInvites)
+  }
+
+  const handleRevokeGroupInvite = async (groupId, inviteId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+
+    await requestJson(`/api/v1/groups/${groupId}/invites/${encodeURIComponent(String(inviteId ?? '').trim())}`, {
+      method: 'DELETE',
+      headers: buildAuthHeaders(session),
+    })
+
+    const groupMembers = await fetchGroupMembers(groupId, session)
+    const groupInvites = await fetchGroupInvites(groupId, session)
+    applyGroupStateToTrips(groupId, groupMembers, groupInvites)
+  }
+
+  const handleAcceptGroupInvite = async (inviteCode) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('초대를 수락하려면 먼저 로그인해주세요.')
+    }
+
+    const response = await requestJson(`/api/v1/invites/${encodeURIComponent(String(inviteCode ?? '').trim())}/accept`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...buildAuthHeaders(session),
+      },
+      body: JSON.stringify({
+        consent: {
+          type: DEFAULT_CONSENT_TYPE,
+          agreedVersion: DEFAULT_CONSENT_VERSION,
+        },
+      }),
+    })
+
+    const acceptedGroupId = String(response?.groupId ?? '').trim()
+    if (acceptedGroupId) {
+      setStoredGroupId(session.user.email, acceptedGroupId)
+    }
+    await loadTripsFromServer(session)
+    setInvitePreview((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: 'ACCEPTED',
+          }
+        : prev,
+    )
+      setRouteHash('trips')
+    return response
   }
   const handleDeleteMyTrip = async (tripId) => {
     const normalizedTripId = String(tripId ?? '').trim()
@@ -5313,6 +7256,10 @@ function App() {
     }
   }
   const handleUpdateUserRole = async (userId, role) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
     const normalizedUserId = String(userId ?? '').trim()
     const normalizedRole = normalizeAdminRole(role)
     const previousRole = adminUsers.find((user) => user.id === normalizedUserId)?.role ?? 'USER'
@@ -5330,6 +7277,7 @@ function App() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...buildAuthHeaders(session),
         },
         body: JSON.stringify({
           role: normalizedRole,
@@ -5348,6 +7296,10 @@ function App() {
     }
   }
   const handleUpdateUserStatus = async (userId, status) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
     const normalizedUserId = String(userId ?? '').trim()
     const normalizedStatus = normalizeAdminStatus(status)
     const previousStatus = adminUsers.find((user) => user.id === normalizedUserId)?.status ?? 'ACTIVE'
@@ -5365,6 +7317,7 @@ function App() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...buildAuthHeaders(session),
         },
         body: JSON.stringify({
           status: normalizedStatus,
@@ -5383,6 +7336,10 @@ function App() {
     }
   }
   const handleCreatePlace = async (nextPlace) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
     const normalizedPlace = normalizeRecommendedPlaces([nextPlace])[0]
     if (!normalizedPlace) {
       throw new Error('추천장소 입력값이 올바르지 않습니다.')
@@ -5392,6 +7349,7 @@ function App() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...buildAuthHeaders(session),
       },
       body: JSON.stringify({
         name: normalizedPlace.name,
@@ -5399,6 +7357,8 @@ function App() {
         description: normalizedPlace.description,
         keywords: normalizedPlace.keywords,
         image: normalizedPlace.image,
+        latitude: Number.isFinite(normalizedPlace.latitude) ? normalizedPlace.latitude : null,
+        longitude: Number.isFinite(normalizedPlace.longitude) ? normalizedPlace.longitude : null,
         isVisible: normalizedPlace.isVisible !== false,
         isSponsored: normalizedPlace.isSponsored === true,
       }),
@@ -5416,7 +7376,37 @@ function App() {
     }))
     setPlacesLoadError('')
   }
+  const handleUploadPlaceImage = async (file) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
+    if (!(file instanceof File) || file.size <= 0) {
+      throw new Error('업로드할 이미지 파일을 선택해주세요.')
+    }
+
+    const formData = new FormData()
+    formData.append('image', file, file.name)
+
+    const response = await requestJson('/api/v1/admin/places/images', {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(session),
+      },
+      body: formData,
+    })
+
+    const uploadedUrl = resolveMediaUrl(String(response?.url ?? '').trim())
+    if (!uploadedUrl) {
+      throw new Error('이미지 업로드 응답이 올바르지 않습니다.')
+    }
+    return uploadedUrl
+  }
   const handleTogglePlaceVisibility = async (placeId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
     const normalizedPlaceId = String(placeId ?? '').trim()
     const currentPlace = recommendedPlaces.find((place) => place.id === normalizedPlaceId)
     if (!currentPlace) {
@@ -5441,6 +7431,7 @@ function App() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...buildAuthHeaders(session),
         },
         body: JSON.stringify({
           isVisible: nextVisibility,
@@ -5467,7 +7458,67 @@ function App() {
       window.alert(detail)
     }
   }
+  const handleTogglePlaceSponsored = async (placeId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
+    const normalizedPlaceId = String(placeId ?? '').trim()
+    const currentPlace = recommendedPlaces.find((place) => place.id === normalizedPlaceId)
+    if (!currentPlace) {
+      return
+    }
+
+    const previousSponsored = currentPlace.isSponsored === true
+    const nextSponsored = !previousSponsored
+    setRecommendedPlaces((prev) =>
+      prev.map((place) =>
+        place.id === normalizedPlaceId
+          ? {
+              ...place,
+              isSponsored: nextSponsored,
+            }
+          : place,
+      ),
+    )
+
+    try {
+      const updated = await requestJson(`/api/v1/admin/places/${encodeURIComponent(normalizedPlaceId)}/sponsored`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildAuthHeaders(session),
+        },
+        body: JSON.stringify({
+          isSponsored: nextSponsored,
+        }),
+      })
+      const normalizedUpdated = normalizeRecommendedPlaces([updated])[0]
+      if (normalizedUpdated) {
+        setRecommendedPlaces((prev) =>
+          prev.map((place) => (place.id === normalizedPlaceId ? normalizedUpdated : place)),
+        )
+      }
+    } catch (updateError) {
+      setRecommendedPlaces((prev) =>
+        prev.map((place) =>
+          place.id === normalizedPlaceId
+            ? {
+                ...place,
+                isSponsored: previousSponsored,
+              }
+            : place,
+        ),
+      )
+      const detail = updateError instanceof Error ? updateError.message : '제휴 상태 변경에 실패했습니다.'
+      window.alert(detail)
+    }
+  }
   const handleDeletePlace = async (placeId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
     const normalizedPlaceId = String(placeId ?? '').trim()
     if (!normalizedPlaceId) {
       return
@@ -5476,6 +7527,7 @@ function App() {
     try {
       await requestJson(`/api/v1/admin/places/${encodeURIComponent(normalizedPlaceId)}`, {
         method: 'DELETE',
+        headers: buildAuthHeaders(session),
       })
     } catch (deleteError) {
       const detail = deleteError instanceof Error ? deleteError.message : '추천장소 삭제에 실패했습니다.'
@@ -5495,30 +7547,226 @@ function App() {
     if (viewingPlaceId === normalizedPlaceId) {
       setViewingPlaceId(null)
       if (activeRoute === 'place-view') {
-        window.location.hash = '#places'
+      setRouteHash('places')
       }
     }
     setPlacesLoadError('')
   }
-  const handleAddPlaceReview = (placeId, review) => {
-    const normalizedReview = normalizePlaceReviewList(
-      [
-        {
-          ...review,
-          id: `${placeId}-review-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
-        },
-      ],
-      placeId,
-    )[0]
+
+  const handleToggleModerationReviewHidden = async (reviewId, nextHidden) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('관리자 작업을 수행하려면 다시 로그인해주세요.')
+    }
+    const reason = nextHidden
+      ? window.prompt('숨김 사유를 입력해주세요.')
+      : '관리자에 의해 복구되었습니다.'
+    const normalizedReason = String(reason ?? '').trim()
+    if (nextHidden && normalizedReason.length < 3) {
+      throw new Error('숨김 사유는 3자 이상 입력해주세요.')
+    }
+
+    const updated = await updateModerationReviewHidden(reviewId, nextHidden, normalizedReason, session)
+    setModerationReviews((prev) =>
+      prev.map((item) =>
+        String(item?.reviewId ?? '') === String(updated?.reviewId ?? '')
+          ? { ...item, ...updated }
+          : item,
+      ),
+    )
+  }
+
+  const handleCreateTripShare = async (tripId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+    const response = await createTripShareLink(tripId, session)
+    const shareToken = String(response?.shareToken ?? '').trim()
+    const shareUrl = resolveTripShareUrl(shareToken, response?.shareUrl)
+    return {
+      ...response,
+      shareToken,
+      shareUrl,
+    }
+  }
+
+  const handleDownloadTripPhotoZip = async (trip) => {
+    const normalizedTripId = String(trip?.id ?? '').trim()
+    if (!normalizedTripId) {
+      throw new Error('다운로드할 여행 정보를 찾지 못했습니다.')
+    }
+
+    let session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+
+    const downloadPath = `/api/v1/trips/${normalizedTripId}/photos/download.zip`
+    const fetchArchive = async (currentSession) => {
+      const response = await fetch(buildApiUrl(downloadPath), {
+        headers: buildAuthHeaders(currentSession),
+      })
+
+      if (!response.ok) {
+        throw new ApiRequestError(await parseApiErrorMessage(response), response.status)
+      }
+
+      return response
+    }
+
+    let response
+    try {
+      response = await fetchArchive(session)
+    } catch (error) {
+      if (!isAuthFailureError(error)) {
+        throw error
+      }
+
+      const refreshedSession = await handleRefreshSession(session.refreshToken)
+      if (!refreshedSession) {
+        throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+      }
+      session = refreshedSession
+      response = await fetchArchive(session)
+    }
+
+    const blob = await response.blob()
+    const parsedFilename = parseContentDispositionFilename(response.headers.get('Content-Disposition'))
+    const fallbackTripName = String(trip?.name ?? '').trim().replace(/[\\/:*?"<>|]+/g, '_') || 'trip'
+    const filename = parsedFilename || `${fallbackTripName}_photos.zip`
+
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => {
+      window.URL.revokeObjectURL(downloadUrl)
+    }, 1000)
+  }
+
+  const handleListTripShares = async (tripId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+    return fetchTripShares(tripId, session)
+  }
+
+  const handleRevokeTripShare = async (tripId, shareId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+    await revokeTripShareLink(tripId, shareId, session)
+  }
+
+  const handleMarkNotificationRead = async (notificationId) => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      return
+    }
+    try {
+      await markNotificationAsRead(notificationId, session)
+      setNotifications((prev) =>
+        prev.map((item) =>
+          String(item?.notificationId ?? '') === String(notificationId ?? '')
+            ? {
+                ...item,
+                isRead: true,
+              }
+            : item,
+        ),
+      )
+      setNotificationsUnreadCount((prev) => Math.max(0, prev - 1))
+    } catch {
+      // Ignore mark-as-read UX failure and keep current list.
+    }
+  }
+
+  const handleMarkAllNotificationsRead = async () => {
+    const session = normalizeUserSession(userSession)
+    if (!session) {
+      return
+    }
+    try {
+      await markAllNotificationsAsRead(session)
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })))
+      setNotificationsUnreadCount(0)
+    } catch {
+      // Ignore mark-all UX failure and keep current list.
+    }
+  }
+
+  const handleLoadMoreNotifications = async () => {
+    const session = normalizeUserSession(userSession)
+    if (!session || !notificationsHasNext || notificationsLoading) {
+      return
+    }
+    setNotificationsLoading(true)
+    try {
+      const result = await fetchNotificationsFromServer(session, {
+        type: notificationsFilter === 'PLACE_REVIEW_CREATED' || notificationsFilter === 'PLACE_REVIEW_REPORTED' || notificationsFilter === 'TRIP_SHARE_CREATED'
+          ? notificationsFilter
+          : '',
+        isRead: notificationsFilter === 'UNREAD' ? false : undefined,
+        page: notificationsPage + 1,
+        size: 20,
+        sort: 'desc',
+      })
+      setNotifications((prev) => {
+        const seen = new Set(prev.map((item) => String(item?.notificationId ?? '').trim()))
+        const incoming = result.items.filter((item) => !seen.has(String(item?.notificationId ?? '').trim()))
+        return [...prev, ...incoming]
+      })
+      setNotificationsHasNext(result.hasNext)
+      setNotificationsPage(result.page)
+      setNotificationsUnreadCount(result.unreadCount)
+    } catch (error) {
+      setNotificationsLoadError(error instanceof Error ? error.message : '알림 추가 조회에 실패했습니다.')
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }
+  const handleAddPlaceReview = async (placeId, review) => {
+    const normalizedPlaceId = String(placeId ?? '').trim()
+    if (!normalizedPlaceId) {
+      throw new Error('추천 장소 정보를 찾지 못했습니다.')
+    }
+
+    const normalizedReview = normalizePlaceReviewList([
+      {
+        ...review,
+      },
+    ], normalizedPlaceId)[0]
 
     if (!normalizedReview) {
-      return
+      throw new Error('후기 입력값이 올바르지 않습니다.')
+    }
+
+    const createdReview = await createPlaceReview(normalizedPlaceId, normalizedReview, normalizeUserSession(userSession))
+    if (!createdReview) {
+      throw new Error('후기 저장 응답이 올바르지 않습니다.')
     }
 
     setPlaceReviews((prev) => ({
       ...prev,
-      [placeId]: [normalizedReview, ...normalizePlaceReviewList(prev[placeId], placeId)],
+      [normalizedPlaceId]: [createdReview, ...normalizePlaceReviewList(prev[normalizedPlaceId], normalizedPlaceId)],
     }))
+  }
+
+  const handleReportPlaceReview = async (placeId, reviewId, reason) => {
+    const normalizedPlaceId = String(placeId ?? '').trim()
+    const normalizedReviewId = String(reviewId ?? '').trim()
+    const normalizedReason = String(reason ?? '').trim()
+    if (!normalizedPlaceId || !normalizedReviewId || normalizedReason.length < 3) {
+      throw new Error('신고 정보가 올바르지 않습니다.')
+    }
+    const session = normalizeUserSession(userSession)
+    await reportPlaceReview(normalizedPlaceId, normalizedReviewId, normalizedReason, session)
   }
   const storeUserSession = (sessionResponse) => {
     const normalizedSession = normalizeUserSession(sessionResponse)
@@ -5552,19 +7800,42 @@ function App() {
     return storeUserSession(legacyResponse)
   }
   const handleRefreshSession = async (refreshToken) => {
-    const response = await requestJson('/api/v1/auth/refresh', {
+    const normalizedRefreshToken = String(refreshToken ?? '').trim()
+    if (!normalizedRefreshToken) {
+      throw new Error('Refresh token is required.')
+    }
+
+    const inFlightRequest = refreshSessionPromiseRef.current
+    if (inFlightRequest?.refreshToken === normalizedRefreshToken) {
+      return inFlightRequest.promise
+    }
+
+    const refreshPromise = requestJson('/api/v1/auth/refresh', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        refreshToken,
+        refreshToken: normalizedRefreshToken,
       }),
     })
-    return storeUserSession(response)
+      .then((response) => storeUserSession(response))
+      .finally(() => {
+        if (refreshSessionPromiseRef.current?.promise === refreshPromise) {
+          refreshSessionPromiseRef.current = null
+        }
+      })
+
+    refreshSessionPromiseRef.current = {
+      refreshToken: normalizedRefreshToken,
+      promise: refreshPromise,
+    }
+
+    return refreshPromise
   }
   const handleLogout = async () => {
     const token = normalizeUserSession(userSession)?.accessToken
+    setIsNotificationPopoverOpen(false)
     if (token) {
       try {
         await requestJson('/api/v1/auth/logout', {
@@ -5579,36 +7850,18 @@ function App() {
     }
     setUserSession(null)
   }
-  const handleAdminLogin = (email, password) => {
-    const normalizedEmail = String(email ?? '').trim().toLowerCase()
-    const normalizedPassword = String(password ?? '')
-
-    if (normalizedEmail !== ADMIN_ACCOUNT.email || normalizedPassword !== ADMIN_ACCOUNT.password) {
-      return {
-        ok: false,
-        message: '관리자 계정 또는 비밀번호가 일치하지 않습니다.',
-      }
-    }
-
-    const nextSession = {
-      role: 'ADMIN',
-      email: ADMIN_ACCOUNT.email,
-      name: ADMIN_ACCOUNT.name,
-      loggedInAt: new Date().toISOString(),
-    }
-
-    setAdminSession(nextSession)
-    window.location.hash = '#admin-dashboard'
-    return { ok: true }
-  }
-  const handleAdminLogout = () => {
-    setAdminSession(null)
+  const handleBackofficeLogout = async () => {
+    await handleLogout()
     if (ADMIN_ROUTE_KEYS.has(activeRoute)) {
-      window.location.hash = '#admin-login'
+      setRouteHash('admin-login')
     }
   }
   const editingTrip = useMemo(() => trips.find((trip) => trip.id === editingTripId) ?? null, [trips, editingTripId])
   const viewingTrip = useMemo(() => trips.find((trip) => trip.id === viewingTripId) ?? null, [trips, viewingTripId])
+  const unreadNotificationCount = useMemo(
+    () => Math.max(0, Number(notificationsUnreadCount) || 0),
+    [notificationsUnreadCount],
+  )
   const viewingPlace = useMemo(
     () => normalizeRecommendedPlaces(recommendedPlaces).find((place) => place.id === viewingPlaceId && place.isVisible !== false) ?? null,
     [recommendedPlaces, viewingPlaceId],
@@ -5627,7 +7880,7 @@ function App() {
         <div className="top-nav-wrap">
           <nav className="top-nav" aria-label="메인 네비게이션">
             {NAV_ITEMS.map((item) => (
-              <a key={item.key} href={`#${item.key}`} className={`nav-item ${item.key === activeRoute ? 'is-active' : ''}`}>
+              <a key={item.key} href={toRouteHref(item.key)} className={`nav-item ${item.key === activeRoute ? 'is-active' : ''}`}>
                 {item.label}
               </a>
             ))}
@@ -5639,15 +7892,83 @@ function App() {
         <div className="auth-nav-wrap">
           <nav className="auth-nav" aria-label="계정 네비게이션">
             {isUserAuthenticated ? (
-              <div className="auth-session">
-                <span>{userSession.user.name}님</span>
+              <div className="auth-session" ref={notificationPopoverRef}>
+                <span>{normalizedSession.user.name}님</span>
+                <button
+                  type="button"
+                  className={`notification-chip notification-chip-btn ${isNotificationPopoverOpen ? 'is-active' : ''}`}
+                  aria-haspopup="dialog"
+                  aria-expanded={isNotificationPopoverOpen}
+                  aria-controls="notification-popover-panel"
+                  onClick={() => setIsNotificationPopoverOpen((prev) => !prev)}
+                >
+                  알림 {unreadNotificationCount}개
+                </button>
                 <button type="button" className="auth-logout-btn" onClick={handleLogout}>
                   로그아웃
                 </button>
+                <div
+                  id="notification-popover-panel"
+                  role="dialog"
+                  aria-label="최근 알림"
+                  className={`notification-popover ${isNotificationPopoverOpen ? 'is-open' : ''}`}
+                >
+                  <div className="notification-popover-head">
+                    <strong>최근 알림</strong>
+                    <button type="button" className="trip-action-btn ghost compact" onClick={handleMarkAllNotificationsRead}>
+                      모두 읽음
+                    </button>
+                  </div>
+                  <div className="notification-filter-row">
+                    {[
+                      ['ALL', '전체'],
+                      ['UNREAD', '읽지 않음'],
+                      ['PLACE_REVIEW_CREATED', '리뷰 등록'],
+                      ['PLACE_REVIEW_REPORTED', '리뷰 신고'],
+                      ['TRIP_SHARE_CREATED', '공유 링크'],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`trip-action-btn ghost compact ${notificationsFilter === key ? 'is-active-filter' : ''}`}
+                        onClick={() => setNotificationsFilter(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {notificationsLoading ? (
+                    <p className="trip-create-caption">알림을 불러오는 중...</p>
+                  ) : notificationsLoadError ? (
+                    <p className="trip-invite-error">{notificationsLoadError}</p>
+                  ) : notifications.length === 0 ? (
+                    <p className="trip-create-caption">새 알림이 없습니다.</p>
+                  ) : (
+                    <ul className="notification-list">
+                      {notifications.map((item) => {
+                        const notificationId = String(item?.notificationId ?? '').trim()
+                        return (
+                          <li key={notificationId || `${item?.title}-${item?.createdAt}`} className={item?.isRead ? 'is-read' : ''}>
+                            <button type="button" onClick={() => handleMarkNotificationRead(notificationId)}>
+                              <strong>{String(item?.title ?? '').trim() || '알림'}</strong>
+                              <span>{String(item?.message ?? '').trim()}</span>
+                              <small>{item?.createdAt ? new Date(item.createdAt).toLocaleString('ko-KR') : ''}</small>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                  {notificationsHasNext && !notificationsLoading && (
+                    <button type="button" className="trip-action-btn ghost compact" onClick={handleLoadMoreNotifications}>
+                      알림 더보기
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               AUTH_NAV_ITEMS.map((item) => (
-                <a key={item.key} href={`#${item.key}`} className={`auth-link ${item.key === activeRoute ? 'is-active' : ''}`}>
+                <a key={item.key} href={toRouteHref(item.key)} className={`auth-link ${item.key === activeRoute ? 'is-active' : ''}`}>
                   {item.label}
                 </a>
               ))
@@ -5657,7 +7978,7 @@ function App() {
       )}
 
       <main className={`page-shell ${isBackofficeRoute ? 'is-admin' : ''}`}>
-        {activeRoute !== 'login' && (
+        {activeRoute !== 'login' && !['home', 'map', 'trips', 'places'].includes(activeRoute) && (
           <section className="page-head">
             <p className="label">{current.label}</p>
             <h1>{current.title}</h1>
@@ -5665,9 +7986,15 @@ function App() {
           </section>
         )}
 
-        {activeRoute === 'home' && <HomeView trips={trips} loading={tripsLoading} loadError={tripsLoadError} onOpenTripView={openTripViewPage} />}
-        {activeRoute === 'map' && <MapView trips={trips} loading={tripsLoading} loadError={tripsLoadError} />}
-        {activeRoute === 'trips' && (
+        {shouldHoldProtectedRouteRender && (
+          <section className="content-card empty-state" aria-live="polite">
+            로그인 상태를 확인하는 중입니다. 잠시만 기다려주세요.
+          </section>
+        )}
+
+        {!shouldHoldProtectedRouteRender && activeRoute === 'home' && <HomeView trips={trips} loading={tripsLoading} loadError={tripsLoadError} onOpenTripView={openTripViewPage} />}
+        {!shouldHoldProtectedRouteRender && activeRoute === 'map' && <MapView trips={trips} loading={tripsLoading} loadError={tripsLoadError} />}
+        {!shouldHoldProtectedRouteRender && activeRoute === 'trips' && (
           <TripsView
             trips={trips}
             loading={tripsLoading}
@@ -5676,29 +8003,56 @@ function App() {
             onOpenTripView={openTripViewPage}
           />
         )}
-        {activeRoute === 'trip-create' && <TripCreateView onCreateTrip={handleCreateTrip} />}
-        {activeRoute === 'trip-detail' && (
+        {!shouldHoldProtectedRouteRender && activeRoute === 'trip-create' && <TripCreateView onCreateTrip={handleCreateTrip} />}
+        {!shouldHoldProtectedRouteRender && activeRoute === 'trip-detail' && (
           <TripDetailPage
             tripId={viewingTripId}
             trip={viewingTrip}
             loading={tripsLoading}
             loadError={tripsLoadError}
-            currentUser={isUserAuthenticated ? userSession.user : null}
+            currentUser={isUserAuthenticated ? normalizedSession.user : null}
             onBackToTrips={backToTripsPage}
             onOpenEditTrip={openTripEditPage}
             onAddTripInvite={handleAddTripInvite}
+            onUpdateGroupMemberRole={handleUpdateGroupMemberRole}
+            onRemoveGroupMember={handleRemoveGroupMember}
+            onRevokeGroupInvite={handleRevokeGroupInvite}
+            onDownloadTripPhotoZip={handleDownloadTripPhotoZip}
+            onCreateTripShare={handleCreateTripShare}
+            onListTripShares={handleListTripShares}
+            onRevokeTripShare={handleRevokeTripShare}
             onDeleteTrip={handleDeleteMyTrip}
           />
         )}
-        {activeRoute === 'trip-edit' && <TripEditView trip={editingTrip} onUpdateTrip={handleUpdateTrip} />}
+        {!shouldHoldProtectedRouteRender && activeRoute === 'trip-edit' && <TripEditView trip={editingTrip} onUpdateTrip={handleUpdateTrip} />}
+        {activeRoute === 'invite' && (
+          <InviteAcceptView
+            inviteCode={viewingInviteCode}
+            invitePreview={invitePreview}
+            loading={invitePreviewLoading}
+            loadError={invitePreviewError}
+            currentUser={isUserAuthenticated ? normalizedSession.user : null}
+            onAcceptInvite={handleAcceptGroupInvite}
+          />
+        )}
+        {activeRoute === 'trip-share' && (
+          <TripShareView
+            shareToken={viewingTripShareToken}
+            tripPreview={tripSharePreview}
+            loading={tripSharePreviewLoading}
+            loadError={tripSharePreviewError}
+          />
+        )}
         {activeRoute === 'places' && (
           <PlacesView places={recommendedPlaces} placeReviews={placeReviews} onOpenPlaceView={openPlaceViewPage} />
         )}
         {activeRoute === 'place-view' && (
           <PlaceViewPage
+            key={viewingPlace?.id ?? 'place-view'}
             place={viewingPlace}
             reviews={placeReviews[viewingPlace?.id] ?? []}
             onAddReview={handleAddPlaceReview}
+            onReportReview={handleReportPlaceReview}
             onBackToPlaces={backToPlacesPage}
           />
         )}
@@ -5706,23 +8060,23 @@ function App() {
           <LoginView
             onGoogleLogin={handleGoogleLogin}
             onLogout={handleLogout}
-            currentUser={isUserAuthenticated ? userSession.user : null}
+            currentUser={isUserAuthenticated ? normalizedSession.user : null}
           />
         )}
         {activeRoute === 'admin-login' && (
           <AdminLoginView
+            isUserAuthenticated={isUserAuthenticated}
             isAdminAuthenticated={isAdminAuthenticated}
             adminSession={adminSession}
-            onAdminLogin={handleAdminLogin}
-            onAdminLogout={handleAdminLogout}
+            onLogout={handleLogout}
           />
         )}
-        {activeRoute === 'admin-dashboard' &&
+        {!shouldHoldProtectedRouteRender && activeRoute === 'admin-dashboard' &&
           (isAdminAuthenticated ? (
             <AdminDashboardView
               activeRoute={activeRoute}
               adminSession={adminSession}
-              onAdminLogout={handleAdminLogout}
+              onAdminLogout={handleBackofficeLogout}
               trips={trips}
               adminUsers={adminUsers}
               places={recommendedPlaces}
@@ -5730,12 +8084,12 @@ function App() {
           ) : (
             <AdminAccessDeniedView />
           ))}
-        {activeRoute === 'admin-trips' &&
+        {!shouldHoldProtectedRouteRender && activeRoute === 'admin-trips' &&
           (isAdminAuthenticated ? (
             <AdminTripsManagementView
               activeRoute={activeRoute}
               adminSession={adminSession}
-              onAdminLogout={handleAdminLogout}
+              onAdminLogout={handleBackofficeLogout}
               trips={trips}
               onUpdateTripAdminStatus={handleUpdateTripAdminStatus}
               onDeleteTrip={handleDeleteTrip}
@@ -5743,12 +8097,12 @@ function App() {
           ) : (
             <AdminAccessDeniedView />
           ))}
-        {activeRoute === 'admin-users' &&
+        {!shouldHoldProtectedRouteRender && activeRoute === 'admin-users' &&
           (isAdminAuthenticated ? (
             <AdminUsersManagementView
               activeRoute={activeRoute}
               adminSession={adminSession}
-              onAdminLogout={handleAdminLogout}
+              onAdminLogout={handleBackofficeLogout}
               adminUsers={adminUsers}
               onUpdateUserRole={handleUpdateUserRole}
               onUpdateUserStatus={handleUpdateUserStatus}
@@ -5758,18 +8112,34 @@ function App() {
           ) : (
             <AdminAccessDeniedView />
           ))}
-        {activeRoute === 'admin-places' &&
+        {!shouldHoldProtectedRouteRender && activeRoute === 'admin-places' &&
           (isAdminAuthenticated ? (
             <AdminPlacesManagementView
               activeRoute={activeRoute}
               adminSession={adminSession}
-              onAdminLogout={handleAdminLogout}
+              onAdminLogout={handleBackofficeLogout}
               places={recommendedPlaces}
               onCreatePlace={handleCreatePlace}
+              onUploadPlaceImage={handleUploadPlaceImage}
               onTogglePlaceVisibility={handleTogglePlaceVisibility}
+              onTogglePlaceSponsored={handleTogglePlaceSponsored}
               onDeletePlace={handleDeletePlace}
               isLoading={placesLoading}
               loadError={placesLoadError}
+            />
+          ) : (
+            <AdminAccessDeniedView />
+          ))}
+        {!shouldHoldProtectedRouteRender && activeRoute === 'admin-place-reviews' &&
+          (isAdminAuthenticated ? (
+            <AdminPlaceReviewsManagementView
+              activeRoute={activeRoute}
+              adminSession={adminSession}
+              onAdminLogout={handleBackofficeLogout}
+              reviews={moderationReviews}
+              onToggleReviewHidden={handleToggleModerationReviewHidden}
+              isLoading={moderationReviewsLoading}
+              loadError={moderationReviewsError}
             />
           ) : (
             <AdminAccessDeniedView />
